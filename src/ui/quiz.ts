@@ -1,5 +1,4 @@
-import { MicService } from '../audio/mic';
-import { lockedNoteStream } from '../audio/pitch';
+import { PitchDetectBridge } from '../audio/pitchdetect-bridge';
 import { NOTE_NAMES, midiToFreq, midiToNoteName, STANDARD_TUNING_MIDI } from '../theory/note';
 import { defaultConfig, randomPrompt, freqMatchesPrompt, allCandidates } from '../quiz/engine';
 import type { QuizConfig, Prompt } from '../quiz/models';
@@ -116,7 +115,6 @@ function collectConfig(host: HTMLElement, cur: QuizConfig): QuizConfig {
 
 function runQuiz(host: HTMLElement, cfg: QuizConfig) {
   saveConfig(cfg);
-  const mic = new MicService();
   const area = document.getElementById('quizRun')!;
   area.classList.remove('hidden');
   area.innerHTML = `
@@ -145,7 +143,7 @@ function runQuiz(host: HTMLElement, cfg: QuizConfig) {
     </div>
   `;
 
-  let idx = 0; let score = 0; let current: Prompt | null = null; let cancelPitch: (()=>void)|null = null; let timerId: any = null; let remaining = cfg.timeLimitSec;
+  let idx = 0; let score = 0; let current: Prompt | null = null; let unsub: (()=>void)|null = null; let timerId: any = null; let remaining = cfg.timeLimitSec;
   // Hold-to-commit state: require a stable note for a period before committing as answer
   let holdStartAt: number | null = null;  // when the current stable note window started
   let holdRefHz: number | null = null;    // reference frequency for stability comparison
@@ -202,50 +200,58 @@ function runQuiz(host: HTMLElement, cfg: QuizConfig) {
   }
 
   async function startAudio() {
-    await mic.start();
-    const an = mic.getAnalyser()!;
-    cancelPitch = lockedNoteStream(an, (hz) => {
-      const now = Date.now();
+    try {
+      await PitchDetectBridge.startLive();
+      unsub?.();
+      unsub = PitchDetectBridge.subscribe(({ hz }) => {
+        const now = Date.now();
 
-      // If we've already committed or are pending an advance, ignore input
-      if (committedThisPrompt || pendingAdvance) return;
+        // If we've already committed or are pending an advance, ignore input
+        if (committedThisPrompt || pendingAdvance) return;
 
-      // Ignore any input right after prompt changes to avoid counting ringing from prior note
-      if (now - promptChangedAt < POST_PROMPT_IGNORE_MS) return;
+        // Ignore any input right after prompt changes to avoid counting ringing from prior note
+        if (now - promptChangedAt < POST_PROMPT_IGNORE_MS) return;
 
-      const midi = Math.round(69 + 12 * Math.log2(hz / cfg.a4));
-      const { name } = midiToNoteName(midi);
-      elHeard.textContent = `${hz.toFixed(1)} Hz (${name})`;
+        const midi = Math.round(69 + 12 * Math.log2(hz / cfg.a4));
+        const { name } = midiToNoteName(midi);
+        elHeard.textContent = `${hz.toFixed(1)} Hz (${name})`;
 
-      const correct = !!(current && freqMatchesPrompt(hz, current, cfg.a4, cfg.centsTolerance));
-      if (correct) {
-        score++;
-        elStatus.textContent = 'Correct!';
-        elNote.style.filter = 'hue-rotate(90deg)';
-      } else {
-        elStatus.textContent = 'Incorrect';
-        elNote.style.filter = 'hue-rotate(-90deg)';
-      }
+        const correct = !!(current && freqMatchesPrompt(hz, current, cfg.a4, cfg.centsTolerance));
+        if (correct) {
+          score++;
+          elStatus.textContent = 'Correct!';
+          elNote.style.filter = 'hue-rotate(90deg)';
+        } else {
+          elStatus.textContent = 'Incorrect';
+          elNote.style.filter = 'hue-rotate(-90deg)';
+        }
 
-      // Commit this prompt and schedule advance
-      committedThisPrompt = true;
-      pendingAdvance = true;
-      holdStartAt = null;
-      holdRefHz = null;
-      if (advanceTimeoutId) { clearTimeout(advanceTimeoutId); }
-      advanceTimeoutId = setTimeout(() => {
-        elNote.style.filter = '';
-        pendingAdvance = false;
-        nextPrompt();
-      }, 700);
-    }, { onsetDelayMs: 2, windowMs: 1000 });
+        // Commit this prompt and schedule advance
+        committedThisPrompt = true;
+        pendingAdvance = true;
+        holdStartAt = null;
+        holdRefHz = null;
+        if (advanceTimeoutId) { clearTimeout(advanceTimeoutId); }
+        advanceTimeoutId = setTimeout(() => {
+          elNote.style.filter = '';
+          pendingAdvance = false;
+          nextPrompt();
+        }, 700);
+      });
+    } catch (e) {
+      console.error(e);
+      elStatus.textContent = 'Mic failed. Use HTTPS/localhost and allow permission.';
+    }
   }
 
   function stopAll() {
-    cancelPitch?.(); cancelPitch = null; mic.stop();
+    unsub?.(); unsub = null;
+    PitchDetectBridge.stop();
     clearInterval(timerId); timerId = null;
     if (advanceTimeoutId) { clearTimeout(advanceTimeoutId); advanceTimeoutId = null; }
     pendingAdvance = false;
+    const startBtn = area.querySelector('#startAudio') as HTMLButtonElement;
+    if (startBtn) startBtn.disabled = false;
   }
 
   (area.querySelector('#startAudio') as HTMLButtonElement).onclick = () => {

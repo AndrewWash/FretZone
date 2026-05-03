@@ -1,5 +1,4 @@
-import { MicService } from '../audio/mic';
-import { stablePitchStream } from '../audio/pitch';
+import { PitchDetectBridge } from '../audio/pitchdetect-bridge';
 import { midiToFreq, midiToNoteName } from '../theory/note';
 
 const STORAGE_KEY = 'fretzone.tuner.a4.v1';
@@ -38,8 +37,7 @@ export function renderTuner(host: HTMLElement) {
     </div>
   `;
 
-  const mic = new MicService();
-  let cancel: (()=>void) | null = null;
+  let unsub: (()=>void) | null = null;
 
   const elHz = host.querySelector('#hz') as HTMLElement;
   const elNote = host.querySelector('#note') as HTMLElement;
@@ -58,10 +56,23 @@ export function renderTuner(host: HTMLElement) {
   }
 
   (host.querySelector('#start') as HTMLButtonElement).onclick = async () => {
-    await mic.start();
-    cancel = stablePitchStream(mic.getAnalyser()!, updatePitch);
+    try {
+      await PitchDetectBridge.startLive();
+      // Re-subscribe each time start is clicked
+      unsub?.();
+      unsub = PitchDetectBridge.subscribe(({ hz }) => updatePitch(hz));
+    } catch (e) {
+      console.error(e);
+      updatePitch(null);
+      alert('Unable to start microphone. Ensure you are on HTTPS or localhost and allow mic access.');
+    }
   };
-  (host.querySelector('#stop') as HTMLButtonElement).onclick = () => { cancel?.(); mic.stop(); };
+  (host.querySelector('#stop') as HTMLButtonElement).onclick = () => {
+    unsub?.();
+    unsub = null;
+    PitchDetectBridge.stop();
+    updatePitch(null);
+  };
   (host.querySelector('#a4') as HTMLInputElement).addEventListener('input', () => {
     const v = Number((host.querySelector('#a4') as HTMLInputElement).value) || 440; saveA4(v);
   });
