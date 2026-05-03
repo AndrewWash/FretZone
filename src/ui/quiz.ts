@@ -1,5 +1,5 @@
 import { MicService } from '../audio/mic';
-import { stablePitchStream } from '../audio/pitch';
+import { lockedNoteStream } from '../audio/pitch';
 import { NOTE_NAMES, midiToFreq, midiToNoteName, STANDARD_TUNING_MIDI } from '../theory/note';
 import { defaultConfig, randomPrompt, freqMatchesPrompt, allCandidates } from '../quiz/engine';
 import type { QuizConfig, Prompt } from '../quiz/models';
@@ -204,75 +204,41 @@ function runQuiz(host: HTMLElement, cfg: QuizConfig) {
   async function startAudio() {
     await mic.start();
     const an = mic.getAnalyser()!;
-    cancelPitch = stablePitchStream(an, (hz) => {
+    cancelPitch = lockedNoteStream(an, (hz) => {
       const now = Date.now();
-      if (!hz) {
-        elHeard.textContent = '--';
-        // No pitch → reset hold
-        holdStartAt = null;
-        holdRefHz = null;
-        return;
-      }
 
       // If we've already committed or are pending an advance, ignore input
-      if (committedThisPrompt || pendingAdvance) {
-        return;
-      }
+      if (committedThisPrompt || pendingAdvance) return;
+
       // Ignore any input right after prompt changes to avoid counting ringing from prior note
-      if (now - promptChangedAt < POST_PROMPT_IGNORE_MS) {
-        // reset hold window so we require a fresh stable note after the ignore window
-        holdStartAt = null;
-        holdRefHz = null;
-        return;
-      }
+      if (now - promptChangedAt < POST_PROMPT_IGNORE_MS) return;
 
       const midi = Math.round(69 + 12 * Math.log2(hz / cfg.a4));
       const { name } = midiToNoteName(midi);
       elHeard.textContent = `${hz.toFixed(1)} Hz (${name})`;
 
-      // Initialize hold window if needed
-      if (holdRefHz == null) {
-        holdRefHz = hz;
-        holdStartAt = now;
-        elStatus.textContent = 'Listening...';
-        return;
+      const correct = !!(current && freqMatchesPrompt(hz, current, cfg.a4, cfg.centsTolerance));
+      if (correct) {
+        score++;
+        elStatus.textContent = 'Correct!';
+        elNote.style.filter = 'hue-rotate(90deg)';
+      } else {
+        elStatus.textContent = 'Incorrect';
+        elNote.style.filter = 'hue-rotate(-90deg)';
       }
 
-      // Check stability versus reference frequency
-      const centsFromRef = Math.abs(1200 * Math.log2(hz / holdRefHz));
-      if (centsFromRef > STABILITY_CENTS) {
-        // Too much deviation → start a new hold window
-        holdRefHz = hz;
-        holdStartAt = now;
-        elStatus.textContent = 'Listening...';
-        return;
-      }
-
-      // Within stability band; check if we've held long enough
-      if (holdStartAt != null && now - holdStartAt >= HOLD_COMMIT_MS) {
-        const heldHz = holdRefHz!;
-        const correct = !!(current && freqMatchesPrompt(heldHz, current, cfg.a4, cfg.centsTolerance));
-        if (correct) {
-          score++;
-          elStatus.textContent = 'Correct!';
-          elNote.style.filter = 'hue-rotate(90deg)';
-        } else {
-          elStatus.textContent = 'Incorrect';
-          elNote.style.filter = 'hue-rotate(-90deg)';
-        }
-        // Commit this prompt and schedule advance
-        committedThisPrompt = true;
-        pendingAdvance = true;
-        holdStartAt = null;
-        holdRefHz = null;
-        if (advanceTimeoutId) { clearTimeout(advanceTimeoutId); }
-        advanceTimeoutId = setTimeout(() => {
-          elNote.style.filter = '';
-          pendingAdvance = false;
-          nextPrompt();
-        }, 700);
-      }
-    });
+      // Commit this prompt and schedule advance
+      committedThisPrompt = true;
+      pendingAdvance = true;
+      holdStartAt = null;
+      holdRefHz = null;
+      if (advanceTimeoutId) { clearTimeout(advanceTimeoutId); }
+      advanceTimeoutId = setTimeout(() => {
+        elNote.style.filter = '';
+        pendingAdvance = false;
+        nextPrompt();
+      }, 700);
+    }, { onsetDelayMs: 2, windowMs: 1000 });
   }
 
   function stopAll() {

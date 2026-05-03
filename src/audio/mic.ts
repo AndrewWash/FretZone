@@ -23,7 +23,7 @@ export class MicService {
       this.sourceNode = source;
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 4096; // higher for better low‑freq resolution
-      analyser.smoothingTimeConstant = 0.1;
+      analyser.smoothingTimeConstant = 0.0; // time-domain detection prefers no built-in smoothing
       source.connect(analyser);
       this.analyser = analyser;
       this.state = 'running';
