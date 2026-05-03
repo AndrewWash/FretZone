@@ -216,27 +216,67 @@ function runQuiz(host: HTMLElement, cfg: QuizConfig) {
         const { name } = midiToNoteName(midi);
         elHeard.textContent = `${hz.toFixed(1)} Hz (${name})`;
 
-        const correct = !!(current && freqMatchesPrompt(hz, current, cfg.a4, cfg.centsTolerance));
-        if (correct) {
-          score++;
-          elStatus.textContent = 'Correct!';
-          elNote.style.filter = 'hue-rotate(90deg)';
-        } else {
-          elStatus.textContent = 'Incorrect';
-          elNote.style.filter = 'hue-rotate(-90deg)';
-        }
+        if (!current) return;
 
-        // Commit this prompt and schedule advance
-        committedThisPrompt = true;
-        pendingAdvance = true;
-        holdStartAt = null;
-        holdRefHz = null;
-        if (advanceTimeoutId) { clearTimeout(advanceTimeoutId); }
-        advanceTimeoutId = setTimeout(() => {
+        // Determine if the currently heard pitch matches the target within tolerance
+        const isCorrectNow = freqMatchesPrompt(hz, current, cfg.a4, cfg.centsTolerance);
+
+        // Helper to compute cents distance between two frequencies
+        const centsBetween = (a: number, b: number) => 1200 * Math.log2(a / b);
+
+        if (isCorrectNow) {
+          // Start or continue a stability hold window around the first matching frequency
+          if (holdRefHz == null) {
+            holdRefHz = hz;
+            holdStartAt = now;
+          } else {
+            const drift = Math.abs(centsBetween(hz, holdRefHz));
+            if (drift > STABILITY_CENTS) {
+              // Reset stability window to the new center if user moved a lot
+              holdRefHz = hz;
+              holdStartAt = now;
+            }
+          }
+
+          // Show feedback while holding
+          if (holdStartAt != null) {
+            const heldMs = now - holdStartAt;
+            const remain = Math.max(0, HOLD_COMMIT_MS - heldMs);
+            elStatus.textContent = remain > 0 ? `Good! Hold steady... ${Math.ceil(remain/100)}%` : 'Good!';
+          }
+
+          // Commit as correct if held long enough
+          if (holdStartAt != null && now - holdStartAt >= HOLD_COMMIT_MS) {
+            score++;
+            elStatus.textContent = 'Correct!';
+            elNote.style.filter = 'hue-rotate(90deg)';
+
+            // Commit this prompt and schedule advance
+            committedThisPrompt = true;
+            pendingAdvance = true;
+            holdStartAt = null;
+            holdRefHz = null;
+            if (advanceTimeoutId) { clearTimeout(advanceTimeoutId); }
+            advanceTimeoutId = setTimeout(() => {
+              elNote.style.filter = '';
+              pendingAdvance = false;
+              nextPrompt();
+            }, 700);
+          }
+        } else {
+          // Not within target tolerance; do not mark incorrect immediately.
+          // Loosen sensitivity by requiring a stable correct note before committing.
+          // Reset stability window if we drift far from current hold center
+          if (holdRefHz != null) {
+            const driftFromHold = Math.abs(centsBetween(hz, holdRefHz));
+            if (driftFromHold > STABILITY_CENTS) {
+              holdRefHz = null;
+              holdStartAt = null;
+            }
+          }
+          elStatus.textContent = 'Listening... Try to match the note.';
           elNote.style.filter = '';
-          pendingAdvance = false;
-          nextPrompt();
-        }, 700);
+        }
       });
     } catch (e) {
       console.error(e);
