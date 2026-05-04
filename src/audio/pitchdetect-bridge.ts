@@ -16,16 +16,36 @@ class Bridge {
   private ensureLoaded(): Promise<void> {
     if (this.scriptLoaded) return this.scriptLoaded;
     this.scriptLoaded = new Promise((resolve, reject) => {
+      const w = (window as any);
       // If already present, resolve immediately
-      if ((window as any).autoCorrelate && (window as any).AudioContext) {
+      if (w.autoCorrelate && w.startPitchDetect) {
+        console.info('[PitchDetectBridge] Legacy script already present; skipping load');
         resolve();
         return;
       }
+      if (!('isSecureContext' in window) || !window.isSecureContext) {
+        console.warn('[PitchDetectBridge] Page is not a secure context (https or localhost). Mic will be blocked by browser.');
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.warn('[PitchDetectBridge] navigator.mediaDevices.getUserMedia is not available in this context');
+      }
       const s = document.createElement('script');
-      s.src = 'zPitchDetect/PitchDetect-main/PitchDetect-main/js/pitchdetect.js';
+      s.src = '/vendor/pitchdetect.js'; // served from Vite public/ with proper MIME
       s.async = true;
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error('Failed to load pitchdetect.js'));
+      s.crossOrigin = 'anonymous';
+      s.onload = () => {
+        console.info('[PitchDetectBridge] Loaded /vendor/pitchdetect.js');
+        if (!(w.autoCorrelate && w.startPitchDetect)) {
+          console.error('[PitchDetectBridge] pitchdetect.js loaded but expected globals not found');
+          reject(new Error('pitchdetect.js did not expose expected globals'));
+          return;
+        }
+        resolve();
+      };
+      s.onerror = (e) => {
+        console.error('[PitchDetectBridge] Failed to load /vendor/pitchdetect.js', e);
+        reject(new Error('Failed to load pitchdetect.js'));
+      };
       document.head.appendChild(s);
     });
     return this.scriptLoaded;
@@ -33,11 +53,25 @@ class Bridge {
 
   async startLive(): Promise<void> {
     await this.ensureLoaded();
-    // Call the library to start the mic flow. This will also start its own RAF update,
-    // but we run our own lightweight reader to emit raw Hz values for our app.
+    console.info('[PitchDetectBridge] Starting live mic...');
+    // Call the legacy library to start the mic flow.
     try {
-      const startPitchDetect = (window as any).startPitchDetect as (() => void) | undefined;
-      if (startPitchDetect) startPitchDetect(); else throw new Error('startPitchDetect not found');
+      const w = (window as any);
+      const startPitchDetect = w.startPitchDetect as (() => void) | undefined;
+      if (!startPitchDetect) throw new Error('startPitchDetect not found');
+      startPitchDetect();
+      // Some browsers require resuming AudioContext after a user gesture.
+      setTimeout(() => {
+        try {
+          const ac: AudioContext | undefined = w.audioContext;
+          if (ac && ac.state === 'suspended' && typeof ac.resume === 'function') {
+            console.info('[PitchDetectBridge] Resuming suspended AudioContext...');
+            ac.resume().catch((err: any) => console.warn('[PitchDetectBridge] AudioContext.resume failed', err));
+          }
+        } catch (e) {
+          console.warn('[PitchDetectBridge] AudioContext resume check failed', e);
+        }
+      }, 0);
     } catch (e) {
       console.error('PitchDetectBridge.startLive: failed to start mic', e);
       throw e;
