@@ -95,7 +95,16 @@ class Bridge {
         w.sourceNode.stop(0);
       }
     } catch {}
-    // Note: media stream from getUserMedia is not explicitly stopped by the lib; we leave it as-is.
+    // Stop MediaStream tracks to release the mic indicator
+    try {
+      const ms: MediaStream | undefined = w.mediaStream;
+      if (ms && typeof ms.getTracks === 'function') {
+        ms.getTracks().forEach((t: MediaStreamTrack) => { try { t.stop(); } catch {} });
+      }
+      if (w.mediaStreamSource && typeof w.mediaStreamSource.disconnect === 'function') {
+        try { w.mediaStreamSource.disconnect(); } catch {}
+      }
+    } catch {}
   }
 
   subscribe(cb: (d: PitchData) => void): Unsubscribe {
