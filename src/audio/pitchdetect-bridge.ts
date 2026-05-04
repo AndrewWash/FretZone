@@ -29,24 +29,59 @@ class Bridge {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         console.warn('[PitchDetectBridge] navigator.mediaDevices.getUserMedia is not available in this context');
       }
-      const s = document.createElement('script');
-      s.src = '/vendor/pitchdetect.js'; // served from Vite public/ with proper MIME
-      s.async = true;
-      s.crossOrigin = 'anonymous';
-      s.onload = () => {
-        console.info('[PitchDetectBridge] Loaded /vendor/pitchdetect.js');
-        if (!(w.autoCorrelate && w.startPitchDetect)) {
-          console.error('[PitchDetectBridge] pitchdetect.js loaded but expected globals not found');
-          reject(new Error('pitchdetect.js did not expose expected globals'));
-          return;
+
+      const candidates = ['/vendor/pitchdetect.js', '/public/vendor/pitchdetect.js', '/pitchdetect.js', '/dist/vendor/pitchdetect.js'];
+      const accepted = ['application/javascript', 'text/javascript', 'application/x-javascript'];
+
+      const tryProbe = async (url: string) => {
+        try {
+          const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+          const ct = (res.headers.get('Content-Type') || '').toLowerCase();
+          console.info('[PitchDetectBridge] Probe', url, '→', res.status, ct || '(no content-type)');
+          if (res.ok && accepted.some(t => ct.includes(t))) return { ok: true, url, ct } as const;
+          return { ok: false, url, ct, status: res.status } as const;
+        } catch (e) {
+          console.warn('[PitchDetectBridge] Probe failed', url, e);
+          return { ok: false, url, ct: '', status: -1 } as const;
         }
-        resolve();
       };
-      s.onerror = (e) => {
-        console.error('[PitchDetectBridge] Failed to load /vendor/pitchdetect.js', e);
-        reject(new Error('Failed to load pitchdetect.js'));
-      };
-      document.head.appendChild(s);
+
+      (async () => {
+        const results = [] as any[];
+        let chosen: string | null = null;
+        for (const u of candidates) {
+          const r = await tryProbe(u);
+          results.push(r);
+          if (r.ok) { chosen = u; break; }
+        }
+        // As an ultra-conservative fallback, if none had a JS MIME but one exists with 200/text/plain,
+        // we still try the primary path to surface a clear error from the script tag loader.
+        if (!chosen) {
+          const any200 = results.find(r => r.status === 200);
+          chosen = (any200 && any200.url) || candidates[0];
+          console.warn('[PitchDetectBridge] No JS-MIME candidate found; falling back to', chosen);
+        }
+
+        const s = document.createElement('script');
+        s.src = chosen!;
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        s.onload = () => {
+          console.info('[PitchDetectBridge] Loaded', chosen);
+          if (!(w.autoCorrelate && w.startPitchDetect)) {
+            console.error('[PitchDetectBridge] pitchdetect.js loaded but expected globals not found');
+            reject(new Error('pitchdetect.js did not expose expected globals'));
+            return;
+          }
+          resolve();
+        };
+        s.onerror = (e) => {
+          console.error('[PitchDetectBridge] Failed to load', chosen, e);
+          const diag = results.map(r => `${r.url} → status=${r.status ?? 'n/a'} ct=${r.ct || 'n/a'}`).join(' | ');
+          reject(new Error('Failed to load pitchdetect.js. Probes: ' + diag + '. Ensure Render publishes the Vite dist/ (Static Site: build "npm run build", publish "dist").'));
+        };
+        document.head.appendChild(s);
+      })();
     });
     return this.scriptLoaded;
   }
