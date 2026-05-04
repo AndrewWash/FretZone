@@ -5,8 +5,6 @@
  autoCorrelate() on the global analyser.
 */
 
-import '../legacy/pitchdetect-global.js';
-
 export type PitchData = { hz: number };
 export type Unsubscribe = () => void;
 
@@ -18,46 +16,28 @@ class Bridge {
   private ensureLoaded(): Promise<void> {
     if (this.scriptLoaded) return this.scriptLoaded;
     this.scriptLoaded = new Promise((resolve, reject) => {
-      const w = (window as any);
-      // Since we import the legacy code as a bundled side-effect, just verify globals exist.
-      if (!('isSecureContext' in window) || !window.isSecureContext) {
-        console.warn('[PitchDetectBridge] Page is not a secure context (https or localhost). Mic will be blocked by browser.');
-      }
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.warn('[PitchDetectBridge] navigator.mediaDevices.getUserMedia is not available in this context');
-      }
-      if (w.autoCorrelate && w.startPitchDetect) {
-        console.info('[PitchDetectBridge] Legacy module present');
+      // If already present, resolve immediately
+      if ((window as any).autoCorrelate && (window as any).AudioContext) {
         resolve();
-      } else {
-        console.error('[PitchDetectBridge] Legacy module missing expected globals');
-        reject(new Error('pitchdetect globals not found after import'));
+        return;
       }
+      const s = document.createElement('script');
+      s.src = 'zPitchDetect/PitchDetect-main/PitchDetect-main/js/pitchdetect.js';
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Failed to load pitchdetect.js'));
+      document.head.appendChild(s);
     });
     return this.scriptLoaded;
   }
 
   async startLive(): Promise<void> {
     await this.ensureLoaded();
-    console.info('[PitchDetectBridge] Starting live mic...');
-    // Call the legacy library to start the mic flow.
+    // Call the library to start the mic flow. This will also start its own RAF update,
+    // but we run our own lightweight reader to emit raw Hz values for our app.
     try {
-      const w = (window as any);
-      const startPitchDetect = w.startPitchDetect as (() => void) | undefined;
-      if (!startPitchDetect) throw new Error('startPitchDetect not found');
-      startPitchDetect();
-      // Some browsers require resuming AudioContext after a user gesture.
-      setTimeout(() => {
-        try {
-          const ac: AudioContext | undefined = w.audioContext;
-          if (ac && ac.state === 'suspended' && typeof ac.resume === 'function') {
-            console.info('[PitchDetectBridge] Resuming suspended AudioContext...');
-            ac.resume().catch((err: any) => console.warn('[PitchDetectBridge] AudioContext.resume failed', err));
-          }
-        } catch (e) {
-          console.warn('[PitchDetectBridge] AudioContext resume check failed', e);
-        }
-      }, 0);
+      const startPitchDetect = (window as any).startPitchDetect as (() => void) | undefined;
+      if (startPitchDetect) startPitchDetect(); else throw new Error('startPitchDetect not found');
     } catch (e) {
       console.error('PitchDetectBridge.startLive: failed to start mic', e);
       throw e;
@@ -95,16 +75,7 @@ class Bridge {
         w.sourceNode.stop(0);
       }
     } catch {}
-    // Stop MediaStream tracks to release the mic indicator
-    try {
-      const ms: MediaStream | undefined = w.mediaStream;
-      if (ms && typeof ms.getTracks === 'function') {
-        ms.getTracks().forEach((t: MediaStreamTrack) => { try { t.stop(); } catch {} });
-      }
-      if (w.mediaStreamSource && typeof w.mediaStreamSource.disconnect === 'function') {
-        try { w.mediaStreamSource.disconnect(); } catch {}
-      }
-    } catch {}
+    // Note: media stream from getUserMedia is not explicitly stopped by the lib; we leave it as-is.
   }
 
   subscribe(cb: (d: PitchData) => void): Unsubscribe {
