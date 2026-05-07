@@ -1,5 +1,6 @@
 import { renderQuiz } from './quiz';
 import { renderTuner } from './tuner';
+import { renderIntervals } from './intervals';
 
 export function renderApp() {
   const root = document.getElementById('app')!;
@@ -15,6 +16,7 @@ export function renderApp() {
           <h3>Apps</h3>
           <div class="row mt-2">
             <button id="btn-quiz">Fretboard Quiz</button>
+            <button id="btn-intervals">Interval Memorization</button>
             <button class="secondary" id="btn-tuner">Tuner</button>
           </div>
         </div>
@@ -31,6 +33,7 @@ export function renderApp() {
 
   const ws = document.getElementById('workspace')!;
   (document.getElementById('btn-quiz') as HTMLButtonElement).onclick = () => renderQuiz(ws);
+  (document.getElementById('btn-intervals') as HTMLButtonElement).onclick = () => renderIntervals(ws);
   (document.getElementById('btn-tuner') as HTMLButtonElement).onclick = () => renderTuner(ws);
 
   // Default view
