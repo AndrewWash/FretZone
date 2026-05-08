@@ -1,4 +1,4 @@
-import { NOTE_NAMES, midiToNoteName, midiToFreq, STANDARD_TUNING_MIDI } from '../theory/note';
+import { STANDARD_TUNING_MIDI, midiToFreq, BASE_LETTERS, allowedPitchClasses, AccidentalMode } from '../theory/note';
 import type { QuizConfig, Prompt, StringId } from './models';
 
 function randOf<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -8,7 +8,8 @@ export function defaultConfig(): QuizConfig {
     fretStart: 1,
     fretEnd: 5,
     strings: [1,2,3,4,5,6],
-    notes: [...NOTE_NAMES],
+    notes: [...BASE_LETTERS],
+    accidentalMode: 'Naturals',
     sightReading: false,
     iterations: 10,
     timeLimitSec: 20,
@@ -20,12 +21,12 @@ export function defaultConfig(): QuizConfig {
 export function allCandidates(cfg: QuizConfig): Prompt[] {
   const prompts: Prompt[] = [];
   const strings: StringId[] = cfg.strings.length ? cfg.strings : [1,2,3,4,5,6];
+  const pcs = allowedPitchClasses(cfg.notes as any, cfg.accidentalMode);
 
   // Include open strings always
   for (const s of strings) {
     const openMidi = STANDARD_TUNING_MIDI[s-1];
-    const { name } = midiToNoteName(openMidi);
-    if (cfg.notes.includes(name)) {
+    if (pcs.has(((openMidi % 12) + 12) % 12)) {
       prompts.push({ stringId: s, fret: 0, midi: openMidi });
     }
   }
@@ -37,8 +38,7 @@ export function allCandidates(cfg: QuizConfig): Prompt[] {
     const base = STANDARD_TUNING_MIDI[s-1];
     for (let f = start; f <= end; f++) {
       const m = base + f;
-      const { name } = midiToNoteName(m);
-      if (cfg.notes.includes(name)) {
+      if (pcs.has(((m % 12) + 12) % 12)) {
         prompts.push({ stringId: s, fret: f, midi: m });
       }
     }

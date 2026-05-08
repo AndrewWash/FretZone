@@ -1,4 +1,4 @@
-import type { NoteName } from '../theory/note';
+import type { BaseLetter, AccidentalMode } from '../theory/note';
 
 export type StringId = 1|2|3|4|5|6; // 1=low E, 6=high E
 
@@ -6,7 +6,8 @@ export interface QuizConfig {
   fretStart: number; // inclusive, 1..16 per spec (0=open always included)
   fretEnd: number;   // inclusive
   strings: StringId[]; // allowed strings for prompts
-  notes: NoteName[]; // allowed chromatic note names
+  notes: BaseLetter[]; // allowed base pitch classes (letters A–G)
+  accidentalMode: AccidentalMode; // global accidental policy
   sightReading: boolean; // hide string hint
   iterations: number; // number of prompts
   timeLimitSec: number; // per note

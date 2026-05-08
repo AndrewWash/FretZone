@@ -1,5 +1,5 @@
 import { PitchDetectBridge } from '../audio/pitchdetect-bridge';
-import { NOTE_NAMES, midiToFreq, midiToNoteName, STANDARD_TUNING_MIDI } from '../theory/note';
+import { BASE_LETTERS, midiToFreq, midiToNoteName, STANDARD_TUNING_MIDI, AccidentalMode } from '../theory/note';
 import { defaultConfig, randomPrompt, freqMatchesPrompt, allCandidates } from '../quiz/engine';
 import type { QuizConfig, Prompt } from '../quiz/models';
 import { renderTrebleNote } from './notation';
@@ -7,7 +7,7 @@ import { renderTrebleNote } from './notation';
 const STORAGE_KEY = 'fretzone.quiz.cfg.v1';
 
 function loadConfig(): QuizConfig {
-  try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch {}
+  try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return { ...defaultConfig(), ...JSON.parse(raw) }; } catch {}
   return defaultConfig();
 }
 function saveConfig(cfg: QuizConfig) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); } catch {} }
@@ -21,8 +21,8 @@ function stringsRow(cfg: QuizConfig): string {
 }
 
 function notesGrid(cfg: QuizConfig): string {
-  return `<div class="grid cols-4">${NOTE_NAMES.map(n => {
-    const c = cfg.notes.includes(n) ? 'checked' : '';
+  return `<div class="grid cols-4">${BASE_LETTERS.map(n => {
+    const c = (cfg.notes as any).includes(n) ? 'checked' : '';
     return `<label><input type="checkbox" data-note="${n}" ${c}/> ${n}</label>`;
   }).join('')}</div>`;
 }
@@ -71,6 +71,16 @@ export function renderQuiz(host: HTMLElement) {
       <div class="mt-3">
         <div class="pill">Notes</div>
         ${notesGrid(cfg)}
+        <div class="mt-2">
+          <label>Accidentals
+            <select id="accMode">
+              <option value="Naturals" ${cfg.accidentalMode==='Naturals'?'selected':''}>Naturals only</option>
+              <option value="SharpsPlusNaturals" ${cfg.accidentalMode==='SharpsPlusNaturals'?'selected':''}>Sharps + naturals</option>
+              <option value="FlatsPlusNaturals" ${cfg.accidentalMode==='FlatsPlusNaturals'?'selected':''}>Flats + naturals</option>
+              <option value="All" ${cfg.accidentalMode==='All'?'selected':''}>All</option>
+            </select>
+          </label>
+        </div>
       </div>
       <div class="row mt-3">
         <button id="startQuiz">Start Quiz</button>
@@ -87,7 +97,7 @@ export function renderQuiz(host: HTMLElement) {
     poolInfo.textContent = `${total} possible prompts`;
     saveConfig(cfg);
   };
-  host.querySelectorAll('input').forEach(el => el.addEventListener('input', updatePoolInfo));
+  host.querySelectorAll('input,select').forEach(el => el.addEventListener('input', updatePoolInfo));
   updatePoolInfo();
 
   (document.getElementById('startQuiz') as HTMLButtonElement).onclick = () => runQuiz(host, collectConfig(host, cfg));
@@ -99,12 +109,14 @@ function collectConfig(host: HTMLElement, cur: QuizConfig): QuizConfig {
   host.querySelectorAll('input[data-s]').forEach(i => { if ((i as HTMLInputElement).checked) strings.push(Number((i as HTMLInputElement).dataset.s)); });
   const notes: string[] = [];
   host.querySelectorAll('input[data-note]').forEach(i => { if ((i as HTMLInputElement).checked) notes.push(String((i as HTMLInputElement).dataset.note)); });
+  const accMode = (host.querySelector('#accMode') as HTMLSelectElement)?.value as AccidentalMode ?? cur.accidentalMode;
   return {
     ...cur,
     fretStart: Math.min(16, Math.max(1, getNum('frStart'))),
     fretEnd: Math.min(16, Math.max(1, getNum('frEnd'))),
     strings: strings.length? strings as any : [1,2,3,4,5,6],
-    notes: notes.length? notes as any : [...NOTE_NAMES],
+    notes: (notes.length? notes as any : [...BASE_LETTERS]) as any,
+    accidentalMode: accMode,
     sightReading: (host.querySelector('#sight') as HTMLInputElement).checked,
     iterations: Math.max(1, getNum('iters')),
     timeLimitSec: Math.min(60, Math.max(1, getNum('timeLimit'))),
@@ -177,7 +189,7 @@ function runQuiz(host: HTMLElement, cfg: QuizConfig) {
     elIdx.textContent = `${idx+1}/${cfg.iterations}`;
     // Clear any prior tint before rendering the next note
     elNote.style.filter = '';
-    renderTrebleNote(elNote, current.midi, { width: 520, height: 180 });
+    renderTrebleNote(elNote, current.midi, { width: 520, height: 180, accidentalMode: cfg.accidentalMode });
     stringDiagram(elStrings, cfg.sightReading ? undefined : current.stringId);
     remaining = cfg.timeLimitSec; elTimer.textContent = String(remaining);
     elStatus.textContent = 'Play the note';
