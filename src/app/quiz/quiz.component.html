@@ -1,106 +1,160 @@
 @if (phase() === 'setup') {
-  <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 shadow-md" [formGroup]="form">
-    <h3 class="text-lg font-semibold">Fretboard Quiz — Setup</h3>
+  <form [formGroup]="form" (ngSubmit)="startQuiz()" autocomplete="off" class="qz-setup">
+    <div class="qz-setup-head">
+      <h2 class="qz-setup-title">Fretboard Quiz</h2>
+      <span class="qz-setup-badge">Setup</span>
+    </div>
 
-    <div class="grid gap-3 grid-cols-1 md:grid-cols-3 mt-3">
-      <div>
-        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Fret range (1–16, opens always included)</span>
-        <div class="flex flex-wrap gap-3 items-center mt-2">
-          <label>Start <input type="number" min="1" max="16" formControlName="fretStart" /></label>
-          <label>End <input type="number" min="1" max="16" formControlName="fretEnd" /></label>
+    <div class="qz-config-grid">
+      <div class="qz-config-col" role="group" aria-labelledby="qs-lbl-fret">
+        <div>
+          <span id="qs-lbl-fret" class="qz-field-lbl">Fret range</span>
+          <p class="qz-field-hint">Open strings always included</p>
+          <div class="qz-inline">
+            <label>Start <input type="number" min="1" max="16" formControlName="fretStart" class="qz-num" /></label>
+            <label>End <input type="number" min="1" max="16" formControlName="fretEnd" class="qz-num" /></label>
+          </div>
+        </div>
+        <div>
+          <span id="qs-lbl-time" class="qz-field-lbl">Time per note (sec)</span>
+          <input id="qs-time" aria-labelledby="qs-lbl-time" type="number" min="1" max="60" formControlName="timeLimitSec" class="qz-num" />
+        </div>
+        <div>
+          <span id="qs-lbl-iter" class="qz-field-lbl">Iterations</span>
+          <input id="qs-iter" aria-labelledby="qs-lbl-iter" type="number" min="1" max="200" formControlName="iterations" class="qz-num" />
         </div>
       </div>
-      <div>
-        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Time per note (sec)</span>
-        <input type="number" min="1" max="60" formControlName="timeLimitSec" class="block mt-2" />
-        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs mt-3">Iterations</span>
-        <input type="number" min="1" max="200" formControlName="iterations" class="block mt-2" />
+
+      <div class="qz-config-col" role="group" aria-labelledby="qs-lbl-opts">
+        <span id="qs-lbl-opts" class="qz-field-lbl">Options</span>
+        <label class="qz-opt-row"><input type="checkbox" formControlName="sightReading" /> Sight-reading (hide string hint)</label>
+        <label class="qz-opt-row">A4 (Hz) <input type="number" min="400" max="480" step="0.1" formControlName="a4" class="qz-num" /></label>
+        <label class="qz-opt-row">Tolerance (cents) <input type="number" min="5" max="50" step="1" formControlName="centsTolerance" class="qz-num" /></label>
       </div>
-      <div>
-        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Options</span>
-        <label class="block mt-2"><input type="checkbox" formControlName="sightReading" /> Sight-reading (hide string hint)</label>
-        <label class="block mt-2">A4 (Hz) <input type="number" min="400" max="480" step="0.1" formControlName="a4" /></label>
-        <label class="block mt-2">Tolerance (cents) <input type="number" min="5" max="50" step="1" formControlName="centsTolerance" /></label>
-      </div>
+
+      <div class="qz-config-col"></div>
     </div>
 
-    <div class="mt-4">
-      <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Strings</span>
-      <div class="flex flex-wrap gap-3 mt-2" formArrayName="strings">
+    <fieldset class="qz-section">
+      <legend class="qz-sr">Strings</legend>
+      <div class="qz-section-label" aria-hidden="true">
+        <span class="qz-section-num">01</span>
+        <span class="qz-section-title">Strings</span>
+      </div>
+      <div class="qz-chips" formArrayName="strings">
         @for (ctrl of stringsArr.controls; track $index) {
-          <label><input type="checkbox" [formControlName]="$index" /> String {{ $index + 1 }}</label>
+          <label class="qz-chip">
+            <input type="checkbox" [formControlName]="$index" />
+            <span class="qz-chip-label">{{ stringLabel($index + 1) }}</span>
+          </label>
         }
       </div>
-    </div>
+    </fieldset>
 
-    <div class="mt-4">
-      <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Notes</span>
-      <div class="grid gap-2 grid-cols-4 mt-2" formArrayName="notes">
+    <fieldset class="qz-section">
+      <legend class="qz-sr">Notes</legend>
+      <div class="qz-section-label" aria-hidden="true">
+        <span class="qz-section-num">02</span>
+        <span class="qz-section-title">Notes</span>
+      </div>
+      <div class="qz-notes-row" formArrayName="notes">
         @for (ctrl of notesArr.controls; track $index) {
-          <label><input type="checkbox" [formControlName]="$index" /> {{ baseLetters[$index] }}</label>
+          <label class="qz-chip">
+            <input type="checkbox" [formControlName]="$index" />
+            <span class="qz-chip-label">{{ baseLetters[$index] }}</span>
+          </label>
         }
       </div>
-      <label class="block mt-3">Accidentals
-        <select formControlName="accidentalMode">
+      <div class="qz-acc-row">
+        <span class="qz-acc-lbl" id="qs-lbl-acc">Accidentals</span>
+        <select formControlName="accidentalMode" aria-labelledby="qs-lbl-acc">
           <option value="Naturals">Naturals only</option>
           <option value="SharpsPlusNaturals">Sharps + naturals</option>
           <option value="FlatsPlusNaturals">Flats + naturals</option>
           <option value="All">All</option>
         </select>
-      </label>
-    </div>
+      </div>
+    </fieldset>
 
-    <div class="flex flex-wrap gap-3 items-center mt-4">
-      <button (click)="startQuiz()" [disabled]="poolCount() === 0">Start Quiz</button>
-      <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">{{ poolCount() }} possible prompts</span>
+    <div class="qz-action">
+      <button type="submit" class="qz-start" [disabled]="poolCount() === 0">
+        Start Quiz <span class="qz-start-arrow" aria-hidden="true">→</span>
+      </button>
+      <span class="qz-pool-count">{{ poolCount() }} possible prompts</span>
+      @if (poolCount() === 0) {
+        <span class="qz-pool-err" role="alert">No valid prompts: adjust fret range or selections</span>
+      }
     </div>
-  </div>
+  </form>
 }
 
 @if (phase() === 'running' && cfg(); as c) {
-  <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 shadow-md pb-40">
-    <div class="flex flex-wrap gap-3 items-center justify-between">
-      <div>
-        <strong>Quiz</strong>
-        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs ml-2">{{ idx() }}/{{ c.iterations }}</span>
-      </div>
-      <div class="flex gap-2">
+  <div class="qz-run">
+    <div class="qz-run-head">
+      <h2 class="qz-run-title">
+        Fretboard Quiz
+        <span class="qz-progress-pip">{{ idx() }} / {{ c.iterations }}</span>
+      </h2>
+      <div class="qz-run-actions">
         <button class="secondary" (click)="stopAndReset()">Stop</button>
         <button (click)="startMic()" [disabled]="micStarted()">Start Mic</button>
       </div>
     </div>
 
-    <div class="grid gap-3 grid-cols-1 md:grid-cols-2 mt-4">
-      <div>
+    <div class="qz-run-body">
+      <div class="qz-run-col-left">
         @if (current(); as cur) {
-          <div class="bg-slate-900 border border-slate-800 rounded-lg p-3">
-            @for (s of [6,5,4,3,2,1]; track s) {
-              <div [class.bg-slate-700]="!c.sightReading && s === cur.stringId" class="px-2 py-1">——————— {{ stringLabel(s) }}</div>
+          <div class="qz-strings" role="list" aria-label="Guitar strings">
+            @for (s of [6, 5, 4, 3, 2, 1]; track s) {
+              <div
+                class="qz-string-row"
+                [class.active]="!c.sightReading && s === cur.stringId"
+                role="listitem"
+                [attr.aria-label]="stringLabel(s) + (!c.sightReading && s === cur.stringId ? ' — active' : '')"
+              >
+                <div class="qz-string-line" aria-hidden="true"></div>
+                <span class="qz-string-name">{{ stringLabel(s) }}</span>
+              </div>
             }
           </div>
         }
-        <div class="mt-3 flex justify-center" [style.filter]="noteFilter()">
+
+        <div class="qz-note-wrap" [style.filter]="noteFilter()">
           @if (current(); as cur) {
             <app-treble-note [midi]="cur.midi" [accidentalMode]="c.accidentalMode" [width]="520" [height]="180" />
           }
         </div>
       </div>
-      <div>
-        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Timer</span>
-        <div class="text-5xl font-extrabold mt-1">{{ remaining() }}</div>
-        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs mt-3">Heard</span>
-        <div class="mt-1">{{ heard() }}</div>
-        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs mt-3">Status</span>
-        <div class="mt-1">{{ status() }}</div>
+
+      <div class="qz-run-col-right">
+        <div class="qz-stat-block">
+          <div class="qz-stat-label">Timer</div>
+          <div class="qz-timer-value" aria-live="polite" aria-atomic="true">{{ remaining() }}</div>
+        </div>
+        <div class="qz-stat-block">
+          <div class="qz-stat-label">Heard</div>
+          <div class="qz-stat-value">{{ heard() }}</div>
+        </div>
+        <div class="qz-stat-block">
+          <div class="qz-stat-label">Status</div>
+          <div class="qz-stat-value" aria-live="polite">{{ status() }}</div>
+        </div>
       </div>
     </div>
   </div>
 }
 
 @if (phase() === 'done' && cfg(); as c) {
-  <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 shadow-md text-center">
-    <h3 class="text-lg font-semibold">Done!</h3>
-    <p class="mt-3 text-3xl font-bold">{{ score() }} / {{ c.iterations }}</p>
-    <button class="mt-4" (click)="reset()">Restart</button>
+  <div class="qz-done" role="main" aria-label="Quiz complete">
+    <p class="qz-done-eyebrow">Quiz complete</p>
+    <p class="qz-done-score" aria-label="{{ score() }} out of {{ c.iterations }}">
+      {{ score() }}<span class="qz-done-denom"> / {{ c.iterations }}</span>
+    </p>
+    <p class="qz-done-sub">
+      {{ score() === c.iterations ? 'Perfect score!' : score() === 0 ? 'Keep practicing.' : 'Well played.' }}
+    </p>
+    <div class="qz-done-restart">
+      <button (click)="reset()">Try again</button>
+    </div>
   </div>
 }

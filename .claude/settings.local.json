@@ -5,7 +5,8 @@
       "Bash(npm install *)",
       "Bash(Get-ChildItem -Path \"C:\\\\code\\\\FretZone\" -Recurse -Directory)",
       "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(Sort-Object)"
+      "Bash(Sort-Object)",
+      "Bash(node *)"
     ]
   }
 }
