@@ -1,0 +1,5 @@
+:host { display: block; }
+
+.nav-active {
+  background-color: #2563eb !important;
+}

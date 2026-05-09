@@ -1,8 +1,6 @@
-import { renderApp } from './ui/app';
+import { bootstrapApplication } from '@angular/platform-browser';
+import { appConfig } from './app/app.config';
+import { App } from './app/app';
 
-// Kick off on DOM ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => renderApp());
-} else {
-  renderApp();
-}
+bootstrapApplication(App, appConfig)
+  .catch((err) => console.error(err));

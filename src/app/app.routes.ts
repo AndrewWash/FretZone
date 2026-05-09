@@ -1,0 +1,17 @@
+import { Routes } from '@angular/router';
+
+export const routes: Routes = [
+  { path: '', pathMatch: 'full', redirectTo: 'quiz' },
+  {
+    path: 'quiz',
+    loadComponent: () => import('./quiz/quiz.component').then(m => m.QuizComponent),
+  },
+  {
+    path: 'intervals',
+    loadComponent: () => import('./intervals/intervals.component').then(m => m.IntervalsComponent),
+  },
+  {
+    path: 'tuner',
+    loadComponent: () => import('./tuner/tuner.component').then(m => m.TunerComponent),
+  },
+];
