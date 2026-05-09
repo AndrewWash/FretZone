@@ -6,7 +6,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "FretZoneAng": {
+    "FretZone": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -16,6 +16,10 @@
         "build": {
           "builder": "@angular/build:application",
           "options": {
+            "outputPath": {
+              "base": "dist",
+              "browser": ""
+            },
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
             "assets": [
@@ -56,10 +60,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "FretZoneAng:build:production"
+              "buildTarget": "FretZone:build:production"
             },
             "development": {
-              "buildTarget": "FretZoneAng:build:development"
+              "buildTarget": "FretZone:build:development"
             }
           },
           "defaultConfiguration": "development"
