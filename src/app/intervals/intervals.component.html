@@ -1,0 +1,102 @@
+@if (phase() === 'setup') {
+  <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 shadow-md" [formGroup]="form">
+    <h3 class="text-lg font-semibold">Interval Memorization — Setup</h3>
+    <p class="mt-2 text-slate-400">
+      Choose an interval and practice playing them. For best practice, say the note and interval out loud as you play them.
+      Example: "G is a perfect fifth up from C".
+    </p>
+
+    <div class="grid gap-3 grid-cols-1 md:grid-cols-3 mt-3">
+      <div>
+        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Fret range (1–16, opens always included)</span>
+        <div class="flex flex-wrap gap-3 items-center mt-2">
+          <label>Start <input type="number" min="1" max="16" formControlName="fretStart" /></label>
+          <label>End <input type="number" min="1" max="16" formControlName="fretEnd" /></label>
+        </div>
+        <div class="mt-3">
+          <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Strings</span>
+          <div class="flex flex-wrap gap-3 mt-2" formArrayName="strings">
+            @for (ctrl of stringsArr.controls; track $index) {
+              <label><input type="checkbox" [formControlName]="$index" /> String {{ $index + 1 }}</label>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Intervals</span>
+        <div class="grid gap-2 grid-cols-4 mt-2" formArrayName="intervals">
+          @for (ctrl of intervalsArr.controls; track $index) {
+            <label><input type="checkbox" [formControlName]="$index" /> {{ allIntervals[$index] }}</label>
+          }
+        </div>
+        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs mt-3">Iterations</span>
+        <input type="number" min="1" max="200" formControlName="iterations" class="block mt-2" />
+      </div>
+
+      <div>
+        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Options</span>
+        <label class="block mt-2">Direction
+          <select formControlName="direction">
+            <option value="UpDown">Up → Down</option>
+            <option value="DownUp">Down → Up</option>
+          </select>
+        </label>
+        <label class="block mt-2">Display
+          <select formControlName="display">
+            <option value="Dyad">Dyads</option>
+            <option value="Sequential">Sequential</option>
+            <option value="Both">Both (random)</option>
+          </select>
+        </label>
+        <label class="block mt-2">Accidentals
+          <select formControlName="accidentalMode">
+            <option value="Naturals">Naturals only</option>
+            <option value="SharpsPlusNaturals">Sharps + naturals</option>
+            <option value="FlatsPlusNaturals">Flats + naturals</option>
+            <option value="All">All</option>
+          </select>
+        </label>
+        <label class="block mt-2">A4 (Hz) <input type="number" min="400" max="480" step="0.1" formControlName="a4" /></label>
+        <label class="block mt-2">Tolerance (cents) <input type="number" min="5" max="50" step="1" formControlName="centsTolerance" /></label>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-3 items-center mt-4">
+      <button (click)="start()">Start</button>
+    </div>
+  </div>
+}
+
+@if (phase() === 'running' && cfg(); as c) {
+  <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 shadow-md pb-40">
+    <div class="flex flex-wrap gap-3 items-center justify-between">
+      <div>
+        <strong>Interval Memorization</strong>
+        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs ml-2">{{ progressLabel() }}/{{ c.iterations }}</span>
+      </div>
+      <div class="flex gap-2">
+        <button class="secondary" (click)="stopRun()">Stop</button>
+        <button (click)="startMic()" [disabled]="micStarted()">Start Mic</button>
+      </div>
+    </div>
+
+    <div class="grid gap-3 grid-cols-1 md:grid-cols-2 mt-4">
+      <div>
+        <div class="mt-1 flex justify-center">
+          @if (bottomSp() && topSp()) {
+            <app-staff [n1]="bottomSp()!" [n2]="topSp()!" [mode]="displayMode()" />
+          }
+        </div>
+        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs mt-2">Instruction</span>
+        <div class="mt-1">{{ instr() }}</div>
+      </div>
+      <div>
+        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Heard</span>
+        <div class="mt-1">{{ heard() }}</div>
+        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs mt-3">Status</span>
+        <div class="mt-1">{{ status() }}</div>
+      </div>
+    </div>
+  </div>
+}

@@ -4,7 +4,7 @@ import { renderTrebleNoteEl } from './vexflow-render';
 
 @Component({
   selector: 'app-treble-note',
-  template: `<div #host class="flex justify-center"></div>`,
+  templateUrl: './treble-note.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TrebleNoteComponent {

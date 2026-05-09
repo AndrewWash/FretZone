@@ -11,42 +11,7 @@ const STORAGE_KEY = 'fretzone.tuner.a4.v1';
   selector: 'app-tuner',
   imports: [ReactiveFormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 shadow-md">
-      <h3 class="text-lg font-semibold">Tuner</h3>
-      <div class="flex flex-wrap gap-3 items-center mt-3">
-        <button (click)="onStart()" [disabled]="running()">Start Mic</button>
-        <button class="secondary" (click)="onStop()" [disabled]="!running()">Stop</button>
-        <label>A4 (Hz)
-          <input type="number" min="400" max="480" step="0.1" [formControl]="a4Ctrl" />
-        </label>
-      </div>
-
-      @if (error(); as err) {
-        <p class="text-red-400 mt-3">{{ err }}</p>
-      }
-
-      <div class="grid gap-3 grid-cols-1 sm:grid-cols-3 mt-4">
-        <div>
-          <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Frequency</span>
-          <div class="text-3xl font-bold mt-1">{{ hzText() }}</div>
-        </div>
-        <div>
-          <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Note</span>
-          <div class="text-3xl font-bold mt-1">{{ noteText() }}</div>
-        </div>
-        <div>
-          <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Cents</span>
-          <div class="text-3xl font-bold mt-1">{{ centsText() }}</div>
-        </div>
-      </div>
-
-      <div class="mt-4">
-        <span class="inline-block px-2.5 py-1.5 border border-slate-800 rounded-full text-xs">Tip</span>
-        <p class="mt-2 text-slate-400">Use the tuner to calibrate your instrument; changes to A4 are used by the Fretboard Quiz too.</p>
-      </div>
-    </div>
-  `,
+  templateUrl: './tuner.component.html',
 })
 export class TunerComponent implements OnDestroy {
   private service = inject(PitchDetectService);

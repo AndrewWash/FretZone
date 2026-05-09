@@ -3,7 +3,7 @@ import { Spelled, renderStaffEl } from './vexflow-render';
 
 @Component({
   selector: 'app-staff',
-  template: `<div #host class="flex justify-center"></div>`,
+  templateUrl: './staff.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class StaffComponent {
