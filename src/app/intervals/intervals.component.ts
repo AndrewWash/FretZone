@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormArray, FormBuilder, FormControl, ReactiveFormsModule } from '@angular/forms';
 import { PitchDetectService } from '../core/audio/pitch-detect.service';
 import { startTwoNoteDetection } from '../core/audio/two-note-detection';
-import { AccidentalMode, BaseLetter, spellMidi } from '../core/theory/note';
+import { AccidentalMode, BaseLetter, enharmonicDisplay, spellMidi } from '../core/theory/note';
 import {
   Cycle,
   DirectionMode,
@@ -210,7 +210,12 @@ export class IntervalsComponent implements OnDestroy {
       this.service,
       { bottomMidi, topMidi, a4: c.a4, centsTolerance: c.centsTolerance },
       {
-        onHeard: hz => this.heard.set(hz.toFixed(1) + ' Hz'),
+        onHeard: hz => {
+          const c = this.cfg();
+          const mode = c?.accidentalMode ?? 'Naturals';
+          const midi = Math.round(69 + 12 * Math.log2(hz / (c?.a4 ?? 440)));
+          this.heard.set(`${hz.toFixed(1)} Hz (${enharmonicDisplay(midi, mode)})`);
+        },
         onBottomAccepted: () => this.status.set('Good! Now play the top note...'),
         onTopAccepted: () => this.status.set('Nice!'),
         onSuccess: () => {
