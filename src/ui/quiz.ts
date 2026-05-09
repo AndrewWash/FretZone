@@ -3,22 +3,10 @@ import { BASE_LETTERS, midiToFreq, midiToNoteName, STANDARD_TUNING_MIDI, Acciden
 import { defaultConfig, randomPrompt, freqMatchesPrompt, allCandidates } from '../quiz/engine';
 import type { QuizConfig, Prompt } from '../quiz/models';
 import { renderTrebleNote } from './notation';
+import { loadFromStorage, saveToStorage } from '../utils/storage';
+import { stringsRow } from './form-helpers';
 
 const STORAGE_KEY = 'fretzone.quiz.cfg.v1';
-
-function loadConfig(): QuizConfig {
-  try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return { ...defaultConfig(), ...JSON.parse(raw) }; } catch {}
-  return defaultConfig();
-}
-function saveConfig(cfg: QuizConfig) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); } catch {} }
-
-function stringsRow(cfg: QuizConfig): string {
-  const boxes = [1,2,3,4,5,6].map(s => {
-    const checked = cfg.strings.includes(s as any) ? 'checked' : '';
-    return `<label><input type="checkbox" data-s="${s}" ${checked}/> String ${s}</label>`;
-  }).join(' ');
-  return `<div class="row">${boxes}</div>`;
-}
 
 function notesGrid(cfg: QuizConfig): string {
   return `<div class="grid cols-4">${BASE_LETTERS.map(n => {
@@ -39,7 +27,7 @@ function stringDiagram(el: HTMLElement, highlight?: number) {
 }
 
 export function renderQuiz(host: HTMLElement) {
-  let cfg: QuizConfig = loadConfig();
+  let cfg: QuizConfig = { ...defaultConfig(), ...loadFromStorage<Partial<QuizConfig>>(STORAGE_KEY, {}) };
   host.innerHTML = `
     <div class="card">
       <h3>Fretboard Quiz — Setup</h3>
@@ -95,7 +83,7 @@ export function renderQuiz(host: HTMLElement) {
     cfg = collectConfig(host, cfg);
     const total = allCandidates(cfg).length;
     poolInfo.textContent = `${total} possible prompts`;
-    saveConfig(cfg);
+    saveToStorage(STORAGE_KEY, cfg);
   };
   host.querySelectorAll('input,select').forEach(el => el.addEventListener('input', updatePoolInfo));
   updatePoolInfo();
@@ -126,7 +114,7 @@ function collectConfig(host: HTMLElement, cur: QuizConfig): QuizConfig {
 }
 
 function runQuiz(host: HTMLElement, cfg: QuizConfig) {
-  saveConfig(cfg);
+  saveToStorage(STORAGE_KEY, cfg);
   const area = document.getElementById('quizRun')!;
   area.classList.remove('hidden');
   area.innerHTML = `

@@ -1,4 +1,5 @@
 import { midiToFreq, STANDARD_TUNING_MIDI, AccidentalMode, spellMidi, BaseLetter } from '../theory/note';
+import { randOf } from '../utils/random';
 
 export type IntervalType = 'm2'|'M2'|'m3'|'M3'|'P4'|'Aug4'|'Dim5'|'P5'|'m6'|'M6'|'m7'|'M7'|'P8';
 export type DirectionMode = 'UpDown'|'DownUp';
@@ -26,8 +27,6 @@ export interface DyadPrompt {
   interval: IntervalType;
   display: 'Dyad'|'Sequential';
 }
-
-function randOf<T>(arr: T[]): T { return arr[Math.floor(Math.random()*arr.length)]; }
 
 export function defaultIntervalConfig(): IntervalConfig {
   return {

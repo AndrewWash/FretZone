@@ -1,24 +1,12 @@
-import { Flow } from 'vexflow';
 import { PitchDetectBridge } from '../audio/pitchdetect-bridge';
 import { STANDARD_TUNING_MIDI, AccidentalMode, spellMidi, BaseLetter } from '../theory/note';
 import { buildCycle, defaultIntervalConfig, IntervalConfig, IntervalType, DirectionMode, DisplayMode, writtenNoteNameFromMidi, overrideSpellingForTritone } from '../intervals/engine';
 import { startTwoNoteDetection } from '../intervals/detect';
+import { loadFromStorage, saveToStorage } from '../utils/storage';
+import { stringsRow } from './form-helpers';
+import { renderStaff } from './notation';
 
 const STORAGE_KEY = 'fretzone.intervals.cfg.v1';
-
-function loadCfg(): IntervalConfig {
-  try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return { ...defaultIntervalConfig(), ...JSON.parse(raw) }; } catch {}
-  return defaultIntervalConfig();
-}
-function saveCfg(cfg: IntervalConfig) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); } catch {} }
-
-function stringsRow(cfg: IntervalConfig): string {
-  const boxes = [1,2,3,4,5,6].map(s => {
-    const checked = cfg.strings.includes(s as any) ? 'checked' : '';
-    return `<label><input type="checkbox" data-s="${s}" ${checked}/> String ${s}</label>`;
-  }).join(' ');
-  return `<div class="row">${boxes}</div>`;
-}
 
 const ALL_INTERVALS: IntervalType[] = ['m2','M2','m3','M3','P4','Aug4','Dim5','P5','m6','M6','m7','M7','P8'];
 
@@ -29,57 +17,8 @@ function intervalsGrid(cfg: IntervalConfig): string {
   }).join('')}</div>`;
 }
 
-type Spelled = { key: string; accidental?: '#'|'b' };
-function renderStaff(container: HTMLElement, n1: Spelled, n2: Spelled, mode: 'Dyad'|'Sequential') {
-  const width = 520; const height = 180;
-  container.innerHTML = '';
-  const renderer = new Flow.Renderer(container, Flow.Renderer.Backends.SVG);
-  renderer.resize(width, height);
-  const context = renderer.getContext();
-  context.setFont('Arial', 10, '').setBackgroundFillStyle('#111827');
-  const stave = new Flow.Stave(10, 20, width - 20);
-  stave.addClef('treble');
-  stave.setContext(context).draw();
-
-  // Keys are provided as spelled inputs
-  const keys = [n1.key, n2.key];
-
-  const mk = (k: string, acc?: '#'|'b') => {
-    const note = new Flow.StaveNote({ keys: [k], duration: 'q', clef: 'treble' });
-    if (acc) note.addModifier(new Flow.Accidental(acc), 0);
-    return note;
-  };
-
-  if (mode === 'Dyad') {
-    const dy = new Flow.StaveNote({ keys, duration: 'q', clef: 'treble' });
-    // Handle accidentals per spelled inputs
-    const acc1 = n1.accidental;
-    const acc2 = n2.accidental;
-    if (acc1) dy.addModifier(new Flow.Accidental(acc1), 0);
-    if (acc2) dy.addModifier(new Flow.Accidental(acc2), 1);
-    const voice = new Flow.Voice({ num_beats: 1, beat_value: 4 });
-    voice.addTickables([dy]);
-    new Flow.Formatter().joinVoices([voice]).format([voice], width - 60);
-    voice.draw(context, stave);
-  } else {
-    const nLeft = mk(n1.key, n1.accidental);
-    const nRight = mk(n2.key, n2.accidental);
-    const voice = new Flow.Voice({ num_beats: 2, beat_value: 4 });
-    voice.addTickables([nLeft, nRight]);
-    new Flow.Formatter().joinVoices([voice]).format([voice], width - 60);
-    voice.draw(context, stave);
-    // Small labels 1 and 2
-    const txt1 = new Flow.TextNote({ text: '1', duration: 'q' }).setJustification(Flow.TextNote.Justification.CENTER);
-    const txt2 = new Flow.TextNote({ text: '2', duration: 'q' }).setJustification(Flow.TextNote.Justification.CENTER);
-    const v2 = new Flow.Voice({ num_beats: 2, beat_value: 4 });
-    v2.addTickables([txt1, txt2]);
-    new Flow.Formatter().joinVoices([v2]).format([v2], width - 60);
-    v2.draw(context, stave);
-  }
-}
-
 export function renderIntervals(host: HTMLElement) {
-  let cfg: IntervalConfig = loadCfg();
+  let cfg: IntervalConfig = { ...defaultIntervalConfig(), ...loadFromStorage<Partial<IntervalConfig>>(STORAGE_KEY, {}) };
   host.innerHTML = `
     <div class="card">
       <h3>Interval Memorization — Setup</h3>
@@ -155,13 +94,13 @@ export function renderIntervals(host: HTMLElement) {
     };
   };
 
-  host.querySelectorAll('input,select').forEach(el => el.addEventListener('input', ()=>{ cfg = readCfg(); saveCfg(cfg); }));
+  host.querySelectorAll('input,select').forEach(el => el.addEventListener('input', ()=>{ cfg = readCfg(); saveToStorage(STORAGE_KEY, cfg); }));
 
   (host.querySelector('#start') as HTMLButtonElement).onclick = () => run(host, readCfg());
 }
 
 function run(host: HTMLElement, cfg: IntervalConfig) {
-  saveCfg(cfg);
+  saveToStorage(STORAGE_KEY, cfg);
   const area = document.getElementById('run')!;
   area.classList.remove('hidden');
   area.innerHTML = `

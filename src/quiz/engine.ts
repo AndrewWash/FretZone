@@ -1,7 +1,6 @@
 import { STANDARD_TUNING_MIDI, midiToFreq, BASE_LETTERS, allowedPitchClasses, AccidentalMode } from '../theory/note';
 import type { QuizConfig, Prompt, StringId } from './models';
-
-function randOf<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+import { randOf } from '../utils/random';
 
 export function defaultConfig(): QuizConfig {
   return {
