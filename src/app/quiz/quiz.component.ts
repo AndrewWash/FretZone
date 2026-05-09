@@ -3,7 +3,7 @@ import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormArray, FormBuilder, FormControl, ReactiveFormsModule } from '@angular/forms';
 import { startWith } from 'rxjs/operators';
 import { PitchDetectService, Unsubscribe } from '../core/audio/pitch-detect.service';
-import { AccidentalMode, BASE_LETTERS, BaseLetter, midiToNoteName } from '../core/theory/note';
+import { AccidentalMode, BASE_LETTERS, BaseLetter, enharmonicDisplay } from '../core/theory/note';
 import { allCandidates, defaultConfig, freqMatchesPrompt, randomPrompt } from '../core/quiz/engine';
 import type { Prompt, QuizConfig, StringId } from '../core/quiz/models';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
@@ -206,8 +206,7 @@ export class QuizComponent implements OnDestroy {
     if (now - this.promptChangedAt < POST_PROMPT_IGNORE_MS) return;
 
     const midi = Math.round(69 + 12 * Math.log2(hz / c.a4));
-    const { name } = midiToNoteName(midi);
-    this.heard.set(`${hz.toFixed(1)} Hz (${name})`);
+    this.heard.set(`${hz.toFixed(1)} Hz (${enharmonicDisplay(midi, c.accidentalMode)})`);
 
     const isCorrectNow = freqMatchesPrompt(hz, cur, c.a4, c.centsTolerance);
     const centsBetween = (a: number, b: number) => 1200 * Math.log2(a / b);

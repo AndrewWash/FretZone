@@ -95,10 +95,39 @@ export function spellMidi(
     pick = pool[Math.floor(Math.random() * pool.length)];
   }
 
+  // B# and Cb cross the B→C octave boundary, so adjust the octave number.
+  // Example: MIDI 60 (C4) spelled as B# belongs in octave 3 (B#3 = C4).
+  //          MIDI 59 (B3) spelled as Cb belongs in octave 4 (Cb4 = B3).
+  let noteOctave = octave;
+  if (pick.letter === 'B' && pick.accidental === '#') noteOctave--;
+  if (pick.letter === 'C' && pick.accidental === 'b') noteOctave++;
+
   const name = pick.letter + (pick.accidental ?? '');
   const vfLetter = pick.letter.toLowerCase();
-  const key = `${vfLetter}${pick.accidental ?? ''}/${octave}`;
-  return { name, letter: vfLetter, accidental: pick.accidental, octave, key };
+  const key = `${vfLetter}${pick.accidental ?? ''}/${noteOctave}`;
+  return { name, letter: vfLetter, accidental: pick.accidental, octave: noteOctave, key };
 }
 
 export function naturalPc(letter: BaseLetter): number { return LETTER_TO_PC[letter]; }
+
+export function enharmonicDisplay(midi: number, mode: AccidentalMode): string {
+  const { name } = midiToNoteName(midi);
+  if (mode === 'Naturals') return name;
+  const flatFirst = mode === 'FlatsPlusNaturals';
+  const flatOf: Partial<Record<string, string>> = {
+    'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb',
+  };
+  if (name in flatOf) {
+    const flat = flatOf[name]!;
+    return flatFirst ? `${flat}/${name}` : `${name}/${flat}`;
+  }
+  if (name === 'B' && (mode === 'FlatsPlusNaturals' || mode === 'All'))
+    return flatFirst ? 'Cb/B' : 'B/Cb';
+  if (name === 'C' && (mode === 'SharpsPlusNaturals' || mode === 'All'))
+    return 'B#/C';
+  if (mode === 'All') {
+    if (name === 'E') return 'E/Fb';
+    if (name === 'F') return 'E#/F';
+  }
+  return name;
+}
