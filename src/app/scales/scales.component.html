@@ -14,28 +14,24 @@
           <span id="sc-lbl-scale" class="qz-field-lbl">Scale</span>
           <p class="qz-field-hint">Grouped by Segovia pattern. Disabled options will be filled in later.</p>
           <select formControlName="scaleId" class="sc-scale-select">
-            <optgroup label="── Major ──">
-              @for (g of majorGroups; track g.patternId) {
-                <optgroup [label]="g.patternLabel">
-                  @for (s of g.scales; track s.id) {
-                    <option [value]="s.id" [disabled]="!s.enabled">
-                      {{ scaleLabelOf(s.id) }}{{ s.enabled ? '' : ' (coming soon)' }}
-                    </option>
-                  }
-                </optgroup>
-              }
-            </optgroup>
-            <optgroup label="── Melodic Minor ──">
-              @for (g of minorGroups; track g.patternId) {
-                <optgroup [label]="g.patternLabel">
-                  @for (s of g.scales; track s.id) {
-                    <option [value]="s.id" [disabled]="!s.enabled">
-                      {{ scaleLabelOf(s.id) }}{{ s.enabled ? '' : ' (coming soon)' }}
-                    </option>
-                  }
-                </optgroup>
-              }
-            </optgroup>
+            @for (g of majorGroups; track g.patternId) {
+              <optgroup [label]="'Major — ' + g.patternLabel">
+                @for (s of g.scales; track s.id) {
+                  <option [value]="s.id" [disabled]="!s.enabled">
+                    {{ scaleLabelOf(s.id) }}{{ s.enabled ? '' : ' (coming soon)' }}
+                  </option>
+                }
+              </optgroup>
+            }
+            @for (g of minorGroups; track g.patternId) {
+              <optgroup [label]="'Melodic Minor — ' + g.patternLabel">
+                @for (s of g.scales; track s.id) {
+                  <option [value]="s.id" [disabled]="!s.enabled">
+                    {{ scaleLabelOf(s.id) }}{{ s.enabled ? '' : ' (coming soon)' }}
+                  </option>
+                }
+              </optgroup>
+            }
           </select>
         </div>
       </div>
@@ -95,11 +91,12 @@
           [mode]="staffMode()"
           [showTab]="c.showTab"
           [showFingerings]="c.showFingerings"
+          [rowBreaks]="staffRowBreaks()"
           [width]="960" />
       }
     </div>
 
-    <div class="scl-diagrams">
+    <div class="scl-diagrams" [class.scl-diagrams-stacked]="diagramsStacked()">
       <app-fretboard-diagram
         [dots]="ascendingDots()"
         [caption]="scaleTitle() + ' (Ascending)'"

@@ -775,7 +775,7 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
   background: var(--fz-s1);
 }
 @media (min-width: 860px) {
-  .scl-diagrams {
+  .scl-diagrams:not(.scl-diagrams-stacked) {
     grid-template-columns: 1fr 1fr;
   }
 }

@@ -247,6 +247,10 @@ export interface ScaleRenderOptions {
   showFingerings?: boolean;
   tonic?: BaseLetter;
   mode?: ModeName;
+  // Optional indices into `notes` where a new row begins. Each row gets its
+  // own clef + key signature. Useful for 3-octave scales that look cramped
+  // on a single line.
+  rowBreaks?: number[];
 }
 
 export function renderScaleEl(
@@ -263,14 +267,34 @@ export function renderScaleEl(
   const keySpec = keySignatureSpec(tonic, mode);
   container.innerHTML = '';
 
-  // Layout: clef + key sig at left; one big formatter spans all notes; height
-  // depends on whether TAB is present.
+  // Resolve row break indices into [start, end) ranges. Empty / out-of-range
+  // values collapse to a single row.
+  const breaks = (opts.rowBreaks ?? [])
+    .filter(b => Number.isFinite(b) && b > 0 && b < notes.length)
+    .slice()
+    .sort((a, b) => a - b);
+  const ranges: Array<[number, number]> = [];
+  let cursor = 0;
+  for (const b of breaks) {
+    if (b > cursor) ranges.push([cursor, b]);
+    cursor = b;
+  }
+  if (cursor < notes.length) ranges.push([cursor, notes.length]);
+  if (!ranges.length) ranges.push([0, notes.length]);
+
   const topPad = 30;
-  const staveHeight = 100;
-  const tabGap = 10;
+  // 72 + 8 gives a 40 px gap from the bottom treble line to the tab top.
+  // Pattern #3's lowest note (G3 written) with fingering needs ~50 px, so
+  // expect ~10 px of glyph overlap on that one extreme note; all other
+  // patterns clear cleanly.
+  const staveHeight = 72;
+  const tabGap = 8;
   const tabHeight = showTab ? 110 : 0;
+  const rowGap = 30;
+  const rowHeight = staveHeight + tabGap + tabHeight;
   const bottomPad = 20;
-  const height = topPad + staveHeight + tabGap + tabHeight + bottomPad;
+  const height =
+    topPad + ranges.length * rowHeight + Math.max(0, ranges.length - 1) * rowGap + bottomPad;
 
   const renderer = new Flow.Renderer(container as HTMLDivElement, Flow.Renderer.Backends.SVG);
   renderer.resize(width, height);
@@ -282,79 +306,92 @@ export function renderScaleEl(
   const staveX = 10;
   const staveWidth = width - 20;
 
-  const stave = new Flow.Stave(staveX, topPad, staveWidth);
-  stave.addClef('treble').addKeySignature(keySpec);
-  stave.setContext(ctx).draw();
+  ranges.forEach(([start, end], rowIdx) => {
+    const rowNotes = notes.slice(start, end);
+    const yTop = topPad + rowIdx * (rowHeight + rowGap);
 
-  let tabStave: any = null;
-  if (showTab) {
-    tabStave = new Flow.TabStave(staveX, topPad + staveHeight + tabGap, staveWidth);
-    tabStave.addClef('tab').setNumLines(6);
-    tabStave.setContext(ctx).draw();
-  }
+    const stave = new Flow.Stave(staveX, yTop, staveWidth);
+    stave.addClef('treble').addKeySignature(keySpec);
+    stave.setContext(ctx).draw();
 
-  // Notation voice — each scale tone as a quarter note.
-  const staveNotes = notes.map(n => {
-    const written = n.midi + 12; // sounding → written (treble guitar is octave-up notation)
-    const sp = keyAwareSpelling(written, tonic, mode);
-    const sn = new Flow.StaveNote({ keys: [sp.key], duration: 'q', clef: 'treble' });
-    if (showFingerings && n.finger != null) {
-      const fhf = new Flow.FretHandFinger(String(n.finger));
-      // FretHandFinger defaults to Position.BELOW which is what we want; if
-      // the enum is exposed, prefer it explicitly so future VexFlow updates
-      // can't change the default.
-      try {
-        const pos = (Flow as any).Modifier?.Position?.BELOW;
-        if (pos != null) fhf.setPosition(pos);
-      } catch {}
-      sn.addModifier(fhf, 0);
+    let tabStave: any = null;
+    if (showTab) {
+      tabStave = new Flow.TabStave(staveX, yTop + staveHeight + tabGap, staveWidth);
+      tabStave.addClef('tab').setNumLines(6);
+      tabStave.setContext(ctx).draw();
+      // Treble's lead (clef + key signature) is wider than the tab clef, so
+      // each voice would otherwise draw against a different note-start X and
+      // the columns drift. Force the tab stave's note region to begin at the
+      // same X as the treble's. Must run AFTER draw so format() doesn't
+      // overwrite our value.
+      tabStave.setNoteStartX(stave.getNoteStartX());
     }
-    return sn;
-  });
 
-  // VexFlow's Voice expects beat math to add up. For an arbitrary-length
-  // scale, use SOFT mode so the formatter accepts any tickable count.
-  const voice = new Flow.Voice({ num_beats: notes.length, beat_value: 4 });
-  voice.setMode(Flow.Voice.Mode.SOFT);
-  voice.addTickables(staveNotes);
+    // Notation voice — each scale tone as a quarter note.
+    const staveNotes = rowNotes.map(n => {
+      const written = n.midi + 12; // sounding → written (treble guitar is octave-up notation)
+      const sp = keyAwareSpelling(written, tonic, mode);
+      const sn = new Flow.StaveNote({ keys: [sp.key], duration: 'q', clef: 'treble' });
+      if (showFingerings && n.finger != null) {
+        const fhf = new Flow.FretHandFinger(String(n.finger));
+        // FretHandFinger defaults to Position.BELOW which is what we want; if
+        // the enum is exposed, prefer it explicitly so future VexFlow updates
+        // can't change the default.
+        try {
+          const pos = (Flow as any).Modifier?.Position?.BELOW;
+          if (pos != null) fhf.setPosition(pos);
+        } catch {}
+        sn.addModifier(fhf, 0);
+      }
+      return sn;
+    });
 
-  // Apply key-signature-aware accidentals before formatting.
-  try {
-    Flow.Accidental.applyAccidentals([voice], keySpec);
-  } catch {}
+    // VexFlow's Voice expects beat math to add up. For an arbitrary-length
+    // scale, use SOFT mode so the formatter accepts any tickable count.
+    const voice = new Flow.Voice({ num_beats: rowNotes.length, beat_value: 4 });
+    voice.setMode(Flow.Voice.Mode.SOFT);
+    voice.addTickables(staveNotes);
 
-  // TAB voice mirrors the notation. Strings in VexFlow's TabNote are numbered
-  // 1=top (high E) which matches the project's stringId convention.
-  let tabVoice: any = null;
-  let tabNotes: any[] = [];
-  if (showTab && tabStave) {
-    tabNotes = notes.map(n =>
-      new Flow.TabNote({
-        positions: [{ str: n.stringId, fret: n.fret }],
-        duration: 'q',
-      }),
-    );
-    tabVoice = new Flow.Voice({ num_beats: notes.length, beat_value: 4 });
-    tabVoice.setMode(Flow.Voice.Mode.SOFT);
-    tabVoice.addTickables(tabNotes);
-  }
-
-  // Dim played notes (and their TAB twins) using the same gray as melody.
-  for (let i = 0; i < playedCount && i < staveNotes.length; i++) {
-    staveNotes[i].setStyle(DIM_STYLE);
+    // Apply key-signature-aware accidentals before formatting.
     try {
-      const mods = staveNotes[i].getModifiers();
-      mods.forEach((m: any) => { try { m.setStyle?.(DIM_STYLE); } catch {} });
+      Flow.Accidental.applyAccidentals([voice], keySpec);
     } catch {}
-    if (tabNotes[i]) tabNotes[i].setStyle(DIM_STYLE);
-  }
 
-  const formatter = new Flow.Formatter();
-  if (tabVoice) {
-    formatter.joinVoices([voice, tabVoice]).format([voice, tabVoice], staveWidth - 80);
-  } else {
-    formatter.joinVoices([voice]).format([voice], staveWidth - 80);
-  }
-  voice.draw(ctx, stave);
-  if (tabVoice && tabStave) tabVoice.draw(ctx, tabStave);
+    // TAB voice mirrors the notation. Strings in VexFlow's TabNote are numbered
+    // 1=top (high E) which matches the project's stringId convention.
+    let tabVoice: any = null;
+    let tabNotes: any[] = [];
+    if (showTab && tabStave) {
+      tabNotes = rowNotes.map(n =>
+        new Flow.TabNote({
+          positions: [{ str: n.stringId, fret: n.fret }],
+          duration: 'q',
+        }),
+      );
+      tabVoice = new Flow.Voice({ num_beats: rowNotes.length, beat_value: 4 });
+      tabVoice.setMode(Flow.Voice.Mode.SOFT);
+      tabVoice.addTickables(tabNotes);
+    }
+
+    // Dim played notes (and their TAB twins) using the same gray as melody.
+    // playedCount is global across all rows — convert to row-local index.
+    for (let i = 0; i < staveNotes.length; i++) {
+      if (start + i >= playedCount) break;
+      staveNotes[i].setStyle(DIM_STYLE);
+      try {
+        const mods = staveNotes[i].getModifiers();
+        mods.forEach((m: any) => { try { m.setStyle?.(DIM_STYLE); } catch {} });
+      } catch {}
+      if (tabNotes[i]) tabNotes[i].setStyle(DIM_STYLE);
+    }
+
+    const formatter = new Flow.Formatter();
+    if (tabVoice) {
+      formatter.joinVoices([voice, tabVoice]).format([voice, tabVoice], staveWidth - 80);
+    } else {
+      formatter.joinVoices([voice]).format([voice], staveWidth - 80);
+    }
+    voice.draw(ctx, stave);
+    if (tabVoice && tabStave) tabVoice.draw(ctx, tabStave);
+  });
 }

@@ -16,6 +16,7 @@ export class ScaleStaffComponent {
   width = input(960);
   showTab = input<boolean>(false);
   showFingerings = input<boolean>(false);
+  rowBreaks = input<number[]>([]);
 
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
 
@@ -27,6 +28,7 @@ export class ScaleStaffComponent {
         mode: this.mode(),
         showTab: this.showTab(),
         showFingerings: this.showFingerings(),
+        rowBreaks: this.rowBreaks(),
       });
     });
   }

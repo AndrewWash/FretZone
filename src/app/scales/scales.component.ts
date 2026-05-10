@@ -99,6 +99,23 @@ export class ScalesComponent implements OnDestroy {
     return Math.max(1, lo - 1);
   });
 
+  // Long scales (3-octave) wrap onto two staff lines, breaking at the apex
+  // so row 1 is the ascent and row 2 is the descent. Threshold of 30 notes
+  // captures Pattern #3 (43) but leaves Pattern #1 (29) on a single row.
+  protected staffRowBreaks = computed<number[]>(() => {
+    const r = this.run();
+    if (!r) return [];
+    return r.full.length > 30 ? [r.ascending.length] : [];
+  });
+
+  // Stack the asc/desc fretboard diagrams for 3-octave scales (their wider
+  // fret window squashes side-by-side); keep them side-by-side for the
+  // shorter 2-octave patterns where the diagrams have room.
+  protected diagramsStacked = computed(() => {
+    const r = this.run();
+    return !!r && r.full.length > 30;
+  });
+
   protected diagramFretCount = computed(() => {
     const r = this.run();
     if (!r) return 8;
