@@ -153,16 +153,21 @@ export function renderMelodyEl(
     }
   };
 
-  const drawBeams = (notes: any[], ticks: MelodyTickable[]) => {
+  // Build beams BEFORE voice.draw(): the Beam constructor calls setBeam() on
+  // each note, which is the signal that suppresses the note's own flag. If
+  // beams are built after the notes are drawn, the eighth notes render a
+  // flag AND a beam.
+  const buildBeams = (notes: any[], ticks: MelodyTickable[]) => {
     const noteOnly: any[] = [];
     for (let i = 0; i < notes.length; i++) {
       if (ticks[i].kind === 'note') noteOnly.push(notes[i]);
     }
-    if (!noteOnly.length) return;
+    if (!noteOnly.length) return [] as any[];
     try {
-      const beams = Flow.Beam.generateBeams(noteOnly);
-      beams.forEach(b => b.setContext(ctx).draw());
-    } catch {}
+      return Flow.Beam.generateBeams(noteOnly, { groups: [new Flow.Fraction(1, 4)] });
+    } catch {
+      return [];
+    }
   };
 
   const formatBar = (voice: any, stave: any, noteRegionWidth: number) => {
@@ -204,8 +209,9 @@ export function renderMelodyEl(
       }
       stave.setContext(ctx).draw();
       dimNotes(rv.notes, rowBars[i]);
+      const beams = buildBeams(rv.notes, rowBars[i]);
       formatBar(rv.voice, stave, noteArea);
-      drawBeams(rv.notes, rowBars[i]);
+      beams.forEach(b => b.setContext(ctx).draw());
       xCursor += staveWidth;
     });
     voiceCursor += rowBars.length;

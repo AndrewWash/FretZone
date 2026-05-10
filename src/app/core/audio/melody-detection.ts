@@ -15,7 +15,18 @@ export interface MelodyDetectCallbacks {
 
 const HOLD_COMMIT_MS = 200;
 const STABILITY_CENTS = 40;
-const POST_NOTE_IGNORE_MS = 120;
+const POST_NOTE_IGNORE_MS = 60;
+
+// Re-arm gate: after each accept, the next acceptance is blocked until either
+// the pitch leaves the just-accepted note's tolerance band, or RMS evidence
+// of a fresh attack appears (current sample exceeds a recent local minimum
+// by RE_ATTACK_RATIO). A sustained, decaying tone has localMin tracking the
+// current sample, so the ratio stays near 1 — the gate stays shut. A real
+// re-pluck spikes RMS far above the recent floor — the gate opens.
+const RE_ATTACK_RATIO = 1.8;
+const RMS_FLOOR = 0.01;
+const HISTORY_FRAMES = 12; // ~200ms at 60fps
+const MIN_HISTORY_FRAMES = 6;
 
 export function startMelodyDetection(
   service: PitchDetectService,
@@ -29,6 +40,11 @@ export function startMelodyDetection(
   let lastAcceptedAt = Date.now();
   let completed = false;
 
+  // Re-arm state
+  let armed = true;                       // first note can fire immediately
+  let acceptedTargetHz: number | null = null;
+  const rmsHistory: number[] = [];
+
   const targets = cfg.midis.map(m => midiToFreq(m, cfg.a4));
 
   const withinTol = (hz: number, target: number) => {
@@ -40,19 +56,45 @@ export function startMelodyDetection(
     return Math.abs(cents) <= STABILITY_CENTS;
   };
 
-  const handleHz = (hz: number) => {
+  const pushRms = (rms: number) => {
+    rmsHistory.push(rms);
+    if (rmsHistory.length > HISTORY_FRAMES) rmsHistory.shift();
+  };
+  const localMinRms = () => {
+    let m = Infinity;
+    for (const v of rmsHistory) if (v < m) m = v;
+    return m === Infinity ? 0 : m;
+  };
+
+  const handleFrame = ({ hz, rms }: { hz: number; rms: number }) => {
     if (completed) return;
-    cbs.onHeard?.(hz);
+    if (hz > 0) cbs.onHeard?.(hz);
+
+    pushRms(rms);
+
     const now = Date.now();
     if (now - lastAcceptedAt < POST_NOTE_IGNORE_MS) return;
     if (idx >= targets.length) return;
 
+    if (!armed) {
+      // Path A: pitch moved off the just-accepted note → next note is coming.
+      if (acceptedTargetHz != null && hz > 0 && !withinTol(hz, acceptedTargetHz)) {
+        armed = true;
+      }
+      // Path B: amplitude evidence of a fresh strike on the same pitch.
+      else if (rmsHistory.length >= MIN_HISTORY_FRAMES) {
+        const lm = localMinRms();
+        if (rms > RMS_FLOOR && rms > lm * RE_ATTACK_RATIO) {
+          armed = true;
+        }
+      }
+      if (!armed) return;
+    }
+
+    if (hz <= 0) return;
+
     const target = targets[idx];
 
-    // If two consecutive targets are the same MIDI, the player must release
-    // and re-attack — but our detection is monophonic, so we treat any match
-    // that holds for the required time as acceptance, then enter the post-
-    // note ignore window so we don't double-count the same continuous tone.
     if (withinTol(hz, target)) {
       if (holdStartAt == null) {
         holdStartAt = now;
@@ -70,6 +112,9 @@ export function startMelodyDetection(
         lastAcceptedAt = now;
         holdStartAt = null;
         holdRefHz = null;
+        armed = false;
+        acceptedTargetHz = target;
+        rmsHistory.length = 0;
         cbs.onNoteAccepted?.(acceptedIdx);
         if (idx >= targets.length) {
           completed = true;
@@ -85,7 +130,7 @@ export function startMelodyDetection(
   const start = async () => {
     await service.startLive();
     unsub?.();
-    unsub = service.subscribe(({ hz }) => handleHz(hz));
+    unsub = service.subscribeFrames(handleFrame);
   };
 
   const stop = () => {
