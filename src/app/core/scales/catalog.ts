@@ -208,6 +208,66 @@ export const PATTERN_2_FSHARP: SegoviaPattern = {
 };
 
 // ──────────────────────────────────────────────────────────────────────────
+// Pattern #2 — G# Melodic Minor, 3 octaves (G#2 → G#5). Starts low E fret 4.
+// Same shape as A Melodic Minor Pattern #2, transposed down 1 fret.
+// Ascending raises 6 (E→E#) and 7 (F#→F##/G); descending is natural minor.
+// ──────────────────────────────────────────────────────────────────────────
+const PATTERN_2_GSHARP_ASCENDING: PatternNote[] = [
+  { stringId: 6, fret: 4,  finger: 1 },  // G#2 — bottom tonic
+  { stringId: 6, fret: 6,  finger: 3 },  // A#2
+  { stringId: 6, fret: 7,  finger: 4 },  // B2
+  { stringId: 5, fret: 4,  finger: 1 },  // C#3
+  { stringId: 5, fret: 6,  finger: 3 },  // D#3
+  { stringId: 5, fret: 8,  finger: 1 },  // E#3 (= F3) — shift to VIII
+  { stringId: 5, fret: 10, finger: 3 },  // F##3 (= G3)
+  { stringId: 5, fret: 11, finger: 4 },  // G#3
+  { stringId: 4, fret: 8,  finger: 1 },  // A#3
+  { stringId: 4, fret: 9,  finger: 2 },  // B3
+  { stringId: 4, fret: 11, finger: 4 },  // C#4
+  { stringId: 3, fret: 8,  finger: 1 },  // D#4
+  { stringId: 3, fret: 10, finger: 3 },  // E#4 (= F4)
+  { stringId: 2, fret: 8,  finger: 1 },  // F##4 (= G4)
+  { stringId: 2, fret: 9,  finger: 1 },  // G#4 — shift to IX
+  { stringId: 2, fret: 11, finger: 3 },  // A#4
+  { stringId: 2, fret: 12, finger: 4 },  // B4
+  { stringId: 1, fret: 9,  finger: 1 },  // C#5
+  { stringId: 1, fret: 11, finger: 3 },  // D#5
+  { stringId: 1, fret: 13, finger: 1 },  // E#5 (= F5) — shift to XIII
+  { stringId: 1, fret: 15, finger: 3 },  // F##5 (= G5)
+  { stringId: 1, fret: 16, finger: 4 },  // G#5 — top tonic
+];
+const PATTERN_2_GSHARP_DESCENDING: PatternNote[] = [
+  { stringId: 1, fret: 16, finger: 4 },  // G#5
+  { stringId: 1, fret: 14, finger: 2 },  // F#5
+  { stringId: 1, fret: 12, finger: 4 },  // E5 — shift to IX
+  { stringId: 1, fret: 11, finger: 3 },  // D#5
+  { stringId: 1, fret: 9,  finger: 1 },  // C#5
+  { stringId: 2, fret: 12, finger: 4 },  // B4
+  { stringId: 2, fret: 11, finger: 3 },  // A#4
+  { stringId: 2, fret: 9,  finger: 1 },  // G#4
+  { stringId: 3, fret: 11, finger: 3 },  // F#4
+  { stringId: 3, fret: 9,  finger: 1 },  // E4
+  { stringId: 3, fret: 8,  finger: 3 },  // D#4 — shift to VI
+  { stringId: 3, fret: 6,  finger: 1 },  // C#4
+  { stringId: 4, fret: 9,  finger: 4 },  // B3
+  { stringId: 4, fret: 8,  finger: 3 },  // A#3
+  { stringId: 4, fret: 6,  finger: 1 },  // G#3
+  { stringId: 5, fret: 9,  finger: 4 },  // F#3
+  { stringId: 5, fret: 7,  finger: 2 },  // E3
+  { stringId: 5, fret: 6,  finger: 1 },  // D#3
+  { stringId: 6, fret: 9,  finger: 4 },  // C#3
+  { stringId: 6, fret: 7,  finger: 4 },  // B2 — shift to IV
+  { stringId: 6, fret: 6,  finger: 3 },  // A#2
+  { stringId: 6, fret: 4,  finger: 1 },  // G#2
+];
+export const PATTERN_2_GSHARP: SegoviaPattern = {
+  id: 'pattern-2-gsharp',
+  label: 'Pattern #2',
+  ascending: PATTERN_2_GSHARP_ASCENDING,
+  descending: PATTERN_2_GSHARP_DESCENDING,
+};
+
+// ──────────────────────────────────────────────────────────────────────────
 // Pattern #3 — G Major, 3 octaves (G2 → G5). Starts low E fret 3.
 // ──────────────────────────────────────────────────────────────────────────
 const PATTERN_3_ASCENDING: PatternNote[] = [
@@ -322,6 +382,184 @@ export const PATTERN_3_A: SegoviaPattern = {
   label: 'Pattern #3',
   ascending: PATTERN_3_A_ASCENDING,
   descending: PATTERN_3_A_DESCENDING,
+};
+
+// ──────────────────────────────────────────────────────────────────────────
+// Pattern #3 — E Major, 3 octaves (E2 → E5). Starts on open low E.
+// Open-position variant: ascending packs six notes onto the low E string
+// before jumping to position VI; descending unwinds the same way.
+// ──────────────────────────────────────────────────────────────────────────
+const PATTERN_3_E_ASCENDING: PatternNote[] = [
+  { stringId: 6, fret: 0,  finger: null }, // E2 (open) — bottom tonic
+  { stringId: 6, fret: 2,  finger: 1 },    // F#2
+  { stringId: 6, fret: 4,  finger: 3 },    // G#2
+  { stringId: 6, fret: 5,  finger: 4 },    // A2
+  { stringId: 6, fret: 7,  finger: 2 },    // B2 — shift to VI
+  { stringId: 6, fret: 9,  finger: 4 },    // C#3
+  { stringId: 5, fret: 6,  finger: 1 },    // D#3
+  { stringId: 5, fret: 7,  finger: 2 },    // E3
+  { stringId: 5, fret: 9,  finger: 4 },    // F#3
+  { stringId: 4, fret: 6,  finger: 1 },    // G#3
+  { stringId: 4, fret: 7,  finger: 2 },    // A3
+  { stringId: 4, fret: 9,  finger: 4 },    // B3
+  { stringId: 3, fret: 6,  finger: 1 },    // C#4
+  { stringId: 3, fret: 8,  finger: 3 },    // D#4
+  { stringId: 3, fret: 9,  finger: 1 },    // E4 — shift to IX
+  { stringId: 3, fret: 11, finger: 3 },    // F#4
+  { stringId: 2, fret: 9,  finger: 1 },    // G#4
+  { stringId: 2, fret: 10, finger: 2 },    // A4
+  { stringId: 2, fret: 12, finger: 4 },    // B4
+  { stringId: 1, fret: 9,  finger: 1 },    // C#5
+  { stringId: 1, fret: 11, finger: 3 },    // D#5
+  { stringId: 1, fret: 12, finger: 4 },    // E5 — top tonic
+];
+const PATTERN_3_E_DESCENDING: PatternNote[] = [
+  { stringId: 1, fret: 12, finger: 4 },    // E5
+  { stringId: 1, fret: 11, finger: 3 },    // D#5
+  { stringId: 1, fret: 9,  finger: 1 },    // C#5
+  { stringId: 1, fret: 7,  finger: 4 },    // B4 — shift to IV
+  { stringId: 1, fret: 5,  finger: 2 },    // A4
+  { stringId: 1, fret: 4,  finger: 1 },    // G#4
+  { stringId: 2, fret: 7,  finger: 4 },    // F#4
+  { stringId: 2, fret: 5,  finger: 2 },    // E4
+  { stringId: 2, fret: 4,  finger: 1 },    // D#4
+  { stringId: 3, fret: 6,  finger: 1 },    // C#4
+  { stringId: 3, fret: 4,  finger: 3 },    // B3 — shift to II
+  { stringId: 4, fret: 7,  finger: 4 },    // A3
+  { stringId: 4, fret: 6,  finger: 3 },    // G#3
+  { stringId: 4, fret: 4,  finger: 1 },    // F#3
+  { stringId: 5, fret: 7,  finger: 4 },    // E3
+  { stringId: 5, fret: 6,  finger: 3 },    // D#3
+  { stringId: 5, fret: 4,  finger: 1 },    // C#3
+  { stringId: 5, fret: 2,  finger: 1 },    // B2 — shift to II
+  { stringId: 6, fret: 5,  finger: 4 },    // A2
+  { stringId: 6, fret: 4,  finger: 3 },    // G#2
+  { stringId: 6, fret: 2,  finger: 1 },    // F#2
+  { stringId: 6, fret: 0,  finger: null }, // E2 (open) — bottom tonic
+];
+export const PATTERN_3_E: SegoviaPattern = {
+  id: 'pattern-3-e',
+  label: 'Pattern #3',
+  ascending: PATTERN_3_E_ASCENDING,
+  descending: PATTERN_3_E_DESCENDING,
+};
+
+// ──────────────────────────────────────────────────────────────────────────
+// Pattern #3 — B Major, 3 octaves (B2 → B5). Starts low E fret 7.
+// Same shape as G Major Pattern #3, transposed up 4 frets.
+// ──────────────────────────────────────────────────────────────────────────
+const PATTERN_3_B_ASCENDING: PatternNote[] = [
+  { stringId: 6, fret: 7,  finger: 2 },  // B2 — bottom tonic
+  { stringId: 6, fret: 9,  finger: 4 },  // C#3
+  { stringId: 5, fret: 6,  finger: 1 },  // D#3
+  { stringId: 5, fret: 7,  finger: 2 },  // E3
+  { stringId: 5, fret: 9,  finger: 4 },  // F#3
+  { stringId: 4, fret: 6,  finger: 1 },  // G#3
+  { stringId: 4, fret: 8,  finger: 3 },  // A#3
+  { stringId: 4, fret: 9,  finger: 4 },  // B3
+  { stringId: 3, fret: 6,  finger: 1 },  // C#4
+  { stringId: 3, fret: 8,  finger: 3 },  // D#4
+  { stringId: 3, fret: 9,  finger: 1 },  // E4 — shift to IX
+  { stringId: 3, fret: 11, finger: 3 },  // F#4
+  { stringId: 2, fret: 9,  finger: 1 },  // G#4
+  { stringId: 2, fret: 11, finger: 3 },  // A#4
+  { stringId: 2, fret: 12, finger: 4 },  // B4
+  { stringId: 1, fret: 9,  finger: 1 },  // C#5
+  { stringId: 1, fret: 11, finger: 3 },  // D#5
+  { stringId: 1, fret: 12, finger: 1 },  // E5 — shift to XII
+  { stringId: 1, fret: 14, finger: 3 },  // F#5
+  { stringId: 1, fret: 16, finger: 1 },  // G#5 — shift to XVI
+  { stringId: 1, fret: 18, finger: 3 },  // A#5
+  { stringId: 1, fret: 19, finger: 4 },  // B5 — top tonic
+];
+const PATTERN_3_B_DESCENDING: PatternNote[] = [
+  { stringId: 1, fret: 19, finger: 4 },  // B5
+  { stringId: 1, fret: 18, finger: 3 },  // A#5
+  { stringId: 1, fret: 16, finger: 1 },  // G#5
+  { stringId: 1, fret: 14, finger: 4 },  // F#5 — shift to XI
+  { stringId: 1, fret: 12, finger: 2 },  // E5
+  { stringId: 1, fret: 11, finger: 1 },  // D#5
+  { stringId: 2, fret: 14, finger: 4 },  // C#5
+  { stringId: 2, fret: 12, finger: 2 },  // B4
+  { stringId: 2, fret: 11, finger: 1 },  // A#4
+  { stringId: 3, fret: 13, finger: 3 },  // G#4
+  { stringId: 3, fret: 11, finger: 1 },  // F#4
+  { stringId: 4, fret: 14, finger: 4 },  // E4
+  { stringId: 4, fret: 13, finger: 3 },  // D#4
+  { stringId: 4, fret: 11, finger: 1 },  // C#4
+  { stringId: 5, fret: 14, finger: 4 },  // B3
+  { stringId: 5, fret: 13, finger: 3 },  // A#3
+  { stringId: 5, fret: 11, finger: 1 },  // G#3
+  { stringId: 5, fret: 9,  finger: 4 },  // F#3 — shift to VI
+  { stringId: 5, fret: 7,  finger: 2 },  // E3
+  { stringId: 5, fret: 6,  finger: 1 },  // D#3
+  { stringId: 6, fret: 9,  finger: 4 },  // C#3
+  { stringId: 6, fret: 7,  finger: 2 },  // B2
+];
+export const PATTERN_3_B: SegoviaPattern = {
+  id: 'pattern-3-b',
+  label: 'Pattern #3',
+  ascending: PATTERN_3_B_ASCENDING,
+  descending: PATTERN_3_B_DESCENDING,
+};
+
+// ──────────────────────────────────────────────────────────────────────────
+// Pattern #3 — F# Major, 3 octaves (F#2 → F#5). Starts low E fret 2.
+// Same shape as G Major Pattern #3, transposed down 1 fret.
+// ──────────────────────────────────────────────────────────────────────────
+const PATTERN_3_FSHARP_ASCENDING: PatternNote[] = [
+  { stringId: 6, fret: 2,  finger: 2 },  // F#2 — bottom tonic
+  { stringId: 6, fret: 4,  finger: 4 },  // G#2
+  { stringId: 5, fret: 1,  finger: 1 },  // A#2
+  { stringId: 5, fret: 2,  finger: 2 },  // B2
+  { stringId: 5, fret: 4,  finger: 4 },  // C#3
+  { stringId: 4, fret: 1,  finger: 1 },  // D#3
+  { stringId: 4, fret: 3,  finger: 3 },  // E#3 (= F3)
+  { stringId: 4, fret: 4,  finger: 4 },  // F#3
+  { stringId: 3, fret: 1,  finger: 1 },  // G#3
+  { stringId: 3, fret: 3,  finger: 3 },  // A#3
+  { stringId: 3, fret: 4,  finger: 1 },  // B3 — shift to IV
+  { stringId: 3, fret: 6,  finger: 3 },  // C#4
+  { stringId: 2, fret: 4,  finger: 1 },  // D#4
+  { stringId: 2, fret: 6,  finger: 3 },  // E#4 (= F4)
+  { stringId: 2, fret: 7,  finger: 4 },  // F#4
+  { stringId: 1, fret: 4,  finger: 1 },  // G#4
+  { stringId: 1, fret: 6,  finger: 3 },  // A#4
+  { stringId: 1, fret: 7,  finger: 1 },  // B4 — shift to VII
+  { stringId: 1, fret: 9,  finger: 3 },  // C#5
+  { stringId: 1, fret: 11, finger: 1 },  // D#5 — shift to XI
+  { stringId: 1, fret: 13, finger: 3 },  // E#5 (= F5)
+  { stringId: 1, fret: 14, finger: 4 },  // F#5 — top tonic
+];
+const PATTERN_3_FSHARP_DESCENDING: PatternNote[] = [
+  { stringId: 1, fret: 14, finger: 4 },  // F#5
+  { stringId: 1, fret: 13, finger: 3 },  // E#5
+  { stringId: 1, fret: 11, finger: 1 },  // D#5
+  { stringId: 1, fret: 9,  finger: 4 },  // C#5 — shift to VI
+  { stringId: 1, fret: 7,  finger: 2 },  // B4
+  { stringId: 1, fret: 6,  finger: 1 },  // A#4
+  { stringId: 2, fret: 9,  finger: 4 },  // G#4
+  { stringId: 2, fret: 7,  finger: 2 },  // F#4
+  { stringId: 2, fret: 6,  finger: 1 },  // E#4
+  { stringId: 3, fret: 8,  finger: 3 },  // D#4
+  { stringId: 3, fret: 6,  finger: 1 },  // C#4
+  { stringId: 4, fret: 9,  finger: 4 },  // B3
+  { stringId: 4, fret: 8,  finger: 3 },  // A#3
+  { stringId: 4, fret: 6,  finger: 1 },  // G#3
+  { stringId: 5, fret: 9,  finger: 4 },  // F#3
+  { stringId: 5, fret: 8,  finger: 3 },  // E#3
+  { stringId: 5, fret: 6,  finger: 1 },  // D#3
+  { stringId: 5, fret: 4,  finger: 4 },  // C#3 — shift to I
+  { stringId: 5, fret: 2,  finger: 2 },  // B2
+  { stringId: 5, fret: 1,  finger: 1 },  // A#2
+  { stringId: 6, fret: 4,  finger: 4 },  // G#2
+  { stringId: 6, fret: 2,  finger: 2 },  // F#2
+];
+export const PATTERN_3_FSHARP: SegoviaPattern = {
+  id: 'pattern-3-fsharp',
+  label: 'Pattern #3',
+  ascending: PATTERN_3_FSHARP_ASCENDING,
+  descending: PATTERN_3_FSHARP_DESCENDING,
 };
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -442,15 +680,66 @@ export const PATTERN_5_B: SegoviaPattern = {
   descending: PATTERN_5_B_DESCENDING,
 };
 
+// ──────────────────────────────────────────────────────────────────────────
+// Pattern #7 — C# Melodic Minor, 2 octaves (C#3 → C#5). Starts A string fret 4.
+// Skips the low E string entirely. Ascending raises 6 (A→A#) and 7 (B→B#/C);
+// descending is natural minor.
+// ──────────────────────────────────────────────────────────────────────────
+const PATTERN_7_CSHARP_ASCENDING: PatternNote[] = [
+  { stringId: 5, fret: 4,  finger: 1 },  // C#3 — bottom tonic
+  { stringId: 5, fret: 6,  finger: 3 },  // D#3
+  { stringId: 5, fret: 7,  finger: 4 },  // E3
+  { stringId: 4, fret: 4,  finger: 1 },  // F#3
+  { stringId: 4, fret: 6,  finger: 3 },  // G#3
+  { stringId: 4, fret: 8,  finger: 1 },  // A#3 — shift to VIII
+  { stringId: 4, fret: 10, finger: 3 },  // B#3 (= C4)
+  { stringId: 4, fret: 11, finger: 4 },  // C#4
+  { stringId: 3, fret: 8,  finger: 1 },  // D#4
+  { stringId: 3, fret: 9,  finger: 2 },  // E4
+  { stringId: 3, fret: 11, finger: 4 },  // F#4
+  { stringId: 2, fret: 9,  finger: 2 },  // G#4
+  { stringId: 2, fret: 11, finger: 4 },  // A#4
+  { stringId: 1, fret: 8,  finger: 1 },  // B#4 (= C5)
+  { stringId: 1, fret: 9,  finger: 2 },  // C#5 — top tonic
+];
+const PATTERN_7_CSHARP_DESCENDING: PatternNote[] = [
+  { stringId: 1, fret: 9,  finger: 2 },  // C#5
+  { stringId: 1, fret: 7,  finger: 4 },  // B4 — shift to IV
+  { stringId: 1, fret: 5,  finger: 2 },  // A4
+  { stringId: 1, fret: 4,  finger: 1 },  // G#4
+  { stringId: 2, fret: 7,  finger: 4 },  // F#4
+  { stringId: 2, fret: 5,  finger: 2 },  // E4
+  { stringId: 2, fret: 4,  finger: 1 },  // D#4
+  { stringId: 3, fret: 6,  finger: 3 },  // C#4
+  { stringId: 3, fret: 4,  finger: 1 },  // B3
+  { stringId: 4, fret: 7,  finger: 4 },  // A3
+  { stringId: 4, fret: 6,  finger: 3 },  // G#3
+  { stringId: 4, fret: 4,  finger: 1 },  // F#3
+  { stringId: 5, fret: 7,  finger: 4 },  // E3
+  { stringId: 5, fret: 6,  finger: 3 },  // D#3
+  { stringId: 5, fret: 4,  finger: 1 },  // C#3
+];
+export const PATTERN_7_CSHARP: SegoviaPattern = {
+  id: 'pattern-7-csharp',
+  label: 'Pattern #7',
+  ascending: PATTERN_7_CSHARP_ASCENDING,
+  descending: PATTERN_7_CSHARP_DESCENDING,
+};
+
 const PATTERNS: SegoviaPattern[] = [
   PATTERN_1,
   PATTERN_1_D,
   PATTERN_2_A,
   PATTERN_2_FSHARP,
+  PATTERN_2_GSHARP,
   PATTERN_3,
   PATTERN_3_A,
+  PATTERN_3_E,
+  PATTERN_3_B,
+  PATTERN_3_FSHARP,
   PATTERN_4_E,
   PATTERN_5_B,
+  PATTERN_7_CSHARP,
 ];
 
 export function getPatternById(id: string): SegoviaPattern | undefined {
@@ -471,13 +760,18 @@ const PATTERN_ASSIGNMENTS: Record<ScaleQuality, Partial<Record<Tonic, string>>> 
   Major: {
     'C':  'pattern-1',
     'D':  'pattern-1-d',
+    'E':  'pattern-3-e',
+    'F#': 'pattern-3-fsharp',
     'G':  'pattern-3',
     'A':  'pattern-3-a',
+    'B':  'pattern-3-b',
   },
   MelodicMinor: {
-    'A':  'pattern-2-a',
-    'F#': 'pattern-2-fsharp',
+    'C#': 'pattern-7-csharp',
     'E':  'pattern-4-e',
+    'F#': 'pattern-2-fsharp',
+    'G#': 'pattern-2-gsharp',
+    'A':  'pattern-2-a',
     'B':  'pattern-5-b',
   },
 };

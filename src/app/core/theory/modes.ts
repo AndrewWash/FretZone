@@ -37,8 +37,8 @@ const LETTER_TO_PC: Record<BaseLetter, number> = { C:0, D:2, E:4, F:5, G:7, A:9,
 
 function mod12(n: number) { return ((n % 12) + 12) % 12; }
 
-export function tonicPc(tonic: BaseLetter): number {
-  return LETTER_TO_PC[tonic];
+export function tonicPc(tonic: BaseLetter, offset: 0 | 1 | -1 = 0): number {
+  return mod12(LETTER_TO_PC[tonic] + offset);
 }
 
 export function scalePitchClasses(tonic: BaseLetter, mode: ModeName): number[] {
@@ -85,15 +85,15 @@ export interface ParentMajor {
 
 const parentMajorCache = new Map<string, ParentMajor>();
 
-export function parentMajor(tonic: BaseLetter, mode: ModeName): ParentMajor {
-  const cacheKey = `${tonic}-${mode}`;
+export function parentMajor(tonic: BaseLetter, mode: ModeName, tonicOffset: 0 | 1 | -1 = 0): ParentMajor {
+  const cacheKey = `${tonic}${tonicOffset}-${mode}`;
   const cached = parentMajorCache.get(cacheKey);
   if (cached) return cached;
 
   const tonicLetterIdx = letterIdx(tonic);
   const parentLetterIdx = (tonicLetterIdx - MODE_LETTER_OFFSET[mode] + 7) % 7;
   const parentLetter = LETTERS_CYCLE[parentLetterIdx];
-  const parentPc = mod12(LETTER_TO_PC[tonic] - MODE_PC_OFFSET[mode]);
+  const parentPc = mod12(LETTER_TO_PC[tonic] + tonicOffset - MODE_PC_OFFSET[mode]);
   const naturalPc = LETTER_TO_PC[parentLetter];
   const delta = mod12(parentPc - naturalPc);
   let accidental: '' | '#' | 'b' = '';
@@ -107,8 +107,8 @@ export function parentMajor(tonic: BaseLetter, mode: ModeName): ParentMajor {
   return result;
 }
 
-export function keySignatureSpec(tonic: BaseLetter, mode: ModeName): string {
-  return parentMajor(tonic, mode).spec;
+export function keySignatureSpec(tonic: BaseLetter, mode: ModeName, tonicOffset: 0 | 1 | -1 = 0): string {
+  return parentMajor(tonic, mode, tonicOffset).spec;
 }
 
 // ── Key-aware spelling: deterministic per scale-tone ──────────────────
@@ -143,9 +143,9 @@ function buildPcSpellingMap(pm: ParentMajor): Map<number, PcSpelling> {
   return map;
 }
 
-export function keyAwareSpelling(midi: number, tonic: BaseLetter, mode: ModeName): KeyAwareSpelling {
-  const pm = parentMajor(tonic, mode);
-  const cacheKey = `${tonic}-${mode}`;
+export function keyAwareSpelling(midi: number, tonic: BaseLetter, mode: ModeName, tonicOffset: 0 | 1 | -1 = 0): KeyAwareSpelling {
+  const pm = parentMajor(tonic, mode, tonicOffset);
+  const cacheKey = `${tonic}${tonicOffset}-${mode}`;
   let pcMap = pcMapCache.get(cacheKey);
   if (!pcMap) {
     pcMap = buildPcSpellingMap(pm);
@@ -155,12 +155,13 @@ export function keyAwareSpelling(midi: number, tonic: BaseLetter, mode: ModeName
   const pc = mod12(midi);
   const found = pcMap.get(pc);
   if (!found) {
-    // Chromatic note. Spell as sharp for sharp-side keys, flat otherwise.
-    // Using the root's accidental alone misses neutral roots of sharp keys
-    // (e.g. D major has pm.accidental='' but is still a sharp key).
     const SHARP_SPECS = new Set(['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#']);
     const accMode = SHARP_SPECS.has(pm.spec) ? 'SharpsPlusNaturals' : 'FlatsPlusNaturals';
-    const sp = spellMidi(midi, accMode);
+    // If the diatonic note one semitone below is a plain natural (e.g. E in A major),
+    // this is a raised diatonic tone — prefer its sharp spelling (E# over F, D# over Eb).
+    const oneBelowEntry = pcMap.get(mod12(pc - 1));
+    const preferLetter = (oneBelowEntry && !oneBelowEntry.accidental) ? oneBelowEntry.letter : undefined;
+    const sp = spellMidi(midi, accMode, preferLetter);
     return { key: sp.key, letter: sp.letter, accidental: sp.accidental, octave: sp.octave };
   }
 

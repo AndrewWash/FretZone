@@ -12,6 +12,7 @@ export class ScaleStaffComponent {
   notes = input.required<ScaleRenderNote[]>();
   playedCount = input<number>(0);
   tonic = input<BaseLetter>('C');
+  tonicOffset = input<0 | 1 | -1>(0);
   mode = input<ModeName>('Ionian');
   width = input(960);
   showTab = input<boolean>(false);
@@ -26,6 +27,7 @@ export class ScaleStaffComponent {
       renderScaleEl(this.host().nativeElement, this.notes(), this.playedCount(), {
         width: this.width(),
         tonic: this.tonic(),
+        tonicOffset: this.tonicOffset(),
         mode: this.mode(),
         showTab: this.showTab(),
         showFingerings: this.showFingerings(),

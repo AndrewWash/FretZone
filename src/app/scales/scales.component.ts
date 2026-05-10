@@ -68,6 +68,11 @@ export class ScalesComponent implements OnDestroy {
     return e ? tonicBaseLetter(e.tonic).base : 'C';
   });
 
+  protected staffTonicOffset = computed<0 | 1 | -1>(() => {
+    const e = this.scaleEntry();
+    return e ? tonicBaseLetter(e.tonic).offset : 0;
+  });
+
   protected staffMode = computed<ModeName>(() => {
     const e = this.scaleEntry();
     return e ? qualityToMode(e.quality) : 'Ionian';

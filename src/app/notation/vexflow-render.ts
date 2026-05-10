@@ -246,14 +246,12 @@ export interface ScaleRenderOptions {
   showTab?: boolean;
   showFingerings?: boolean;
   tonic?: BaseLetter;
+  tonicOffset?: 0 | 1 | -1;
   mode?: ModeName;
   // Optional indices into `notes` where a new row begins. Each row gets its
   // own clef + key signature. Useful for 3-octave scales that look cramped
   // on a single line.
   rowBreaks?: number[];
-  // When true, rows after the first row break are treated as descending
-  // melodic minor, and cautionary natural signs are added to the lowered
-  // 6th and 7th scale degrees.
   isMelodicMinor?: boolean;
 }
 
@@ -263,12 +261,13 @@ export function renderScaleEl(
   playedCount: number,
   opts: ScaleRenderOptions = {},
 ) {
-  const width = opts.width ?? 960;
+  const requestedWidth = opts.width ?? 960;
   const tonic: BaseLetter = opts.tonic ?? 'C';
+  const tonicOffset: 0 | 1 | -1 = opts.tonicOffset ?? 0;
   const mode: ModeName = opts.mode ?? 'Ionian';
   const showTab = !!opts.showTab;
   const showFingerings = !!opts.showFingerings;
-  const keySpec = keySignatureSpec(tonic, mode);
+  const keySpec = keySignatureSpec(tonic, mode, tonicOffset);
   container.innerHTML = '';
 
   // Resolve row break indices into [start, end) ranges. Empty / out-of-range
@@ -295,46 +294,51 @@ export function renderScaleEl(
   const tabGap = 8;
   const tabHeight = showTab ? 110 : 0;
   const rowGap = 30;
-  const rowHeight = staveHeight + tabGap + tabHeight;
-  const bottomPad = 20;
+  // When tab is hidden the tab stave no longer occupies the space below the
+  // treble staff, so low ledger-line notes would crash into the next row.
+  // Add extra clearance below each treble row to keep rows separated.
+  const noTabClearance = showTab ? 0 : 60;
+  const rowHeight = staveHeight + tabGap + tabHeight + noTabClearance;
+  const bottomPad = showTab ? 20 : 60;
   const height =
     topPad + ranges.length * rowHeight + Math.max(0, ranges.length - 1) * rowGap + bottomPad;
 
   const renderer = new Flow.Renderer(container as HTMLDivElement, Flow.Renderer.Backends.SVG);
-  renderer.resize(width, height);
+  renderer.resize(requestedWidth, height);
   const ctx = renderer.getContext();
   // White bg fill so the small rectangle VexFlow draws behind each TAB
   // fret number disappears against the (white) staff host background.
   ctx.setFont('Arial', 10, '').setBackgroundFillStyle('#ffffff');
 
   const staveX = 10;
-  const staveWidth = width - 20;
+  const rightPad = 20;
 
-  ranges.forEach(([start, end], rowIdx) => {
+  // Probe the real lead-in (clef + key signature) width for this key. F#
+  // major (6 sharps) is much wider than C major; a fixed reservation would
+  // either waste space or push the last note off the stave.
+  const probe = new Flow.Stave(0, 0, 400).addClef('treble').addKeySignature(keySpec);
+  probe.setContext(ctx);
+  let leadWidth = probe.getNoteStartX() - probe.getX();
+  if (!isFinite(leadWidth) || leadWidth < 60) leadWidth = 90;
+
+  // Build voices first so we can ask the formatter how much room each row
+  // actually needs before deciding the SVG width.
+  type RowState = {
+    rowNotes: ScaleRenderNote[];
+    staveNotes: any[];
+    voice: any;
+    tabVoice: any | null;
+    tabNotes: any[];
+    start: number;
+  };
+
+  const builtRows: RowState[] = ranges.map(([start, end], rowIdx) => {
     const rowNotes = notes.slice(start, end);
-    const yTop = topPad + rowIdx * (rowHeight + rowGap);
-
-    const stave = new Flow.Stave(staveX, yTop, staveWidth);
-    stave.addClef('treble').addKeySignature(keySpec);
-    stave.setContext(ctx).draw();
-
-    let tabStave: any = null;
-    if (showTab) {
-      tabStave = new Flow.TabStave(staveX, yTop + staveHeight + tabGap, staveWidth);
-      tabStave.addClef('tab').setNumLines(6);
-      tabStave.setContext(ctx).draw();
-      // Treble's lead (clef + key signature) is wider than the tab clef, so
-      // each voice would otherwise draw against a different note-start X and
-      // the columns drift. Force the tab stave's note region to begin at the
-      // same X as the treble's. Must run AFTER draw so format() doesn't
-      // overwrite our value.
-      tabStave.setNoteStartX(stave.getNoteStartX());
-    }
 
     // Notation voice — each scale tone as a quarter note.
     const staveNotes = rowNotes.map(n => {
       const written = n.midi + 12; // sounding → written (treble guitar is octave-up notation)
-      const sp = keyAwareSpelling(written, tonic, mode);
+      const sp = keyAwareSpelling(written, tonic, mode, tonicOffset);
       const sn = new Flow.StaveNote({ keys: [sp.key], duration: 'q', clef: 'treble' });
       if (showFingerings && n.finger != null) {
         const fhf = new Flow.FretHandFinger(String(n.finger));
@@ -361,11 +365,11 @@ export function renderScaleEl(
       Flow.Accidental.applyAccidentals([voice], keySpec);
     } catch {}
 
-    // Melodic minor descending rows: add cautionary naturals for the lowered
-    // 6th and 7th. VexFlow only tracks accidentals within a single voice, so
-    // the G# / A# from the ascending row (row 0) are invisible here.
+    // Melodic minor descending rows: rows are independent voices so VexFlow
+    // has no memory of the D#/E# from the ascending row. Add explicit natural
+    // signs to the lowered 6th and 7th so the reader knows they are natural.
     if (opts.isMelodicMinor && breaks.length > 0 && rowIdx > 0) {
-      const rootPc = tonicPc(tonic);
+      const rootPc = tonicPc(tonic, tonicOffset);
       const nat6Pc = (rootPc + 8) % 12;
       const nat7Pc = (rootPc + 10) % 12;
       for (let i = 0; i < staveNotes.length; i++) {
@@ -380,7 +384,7 @@ export function renderScaleEl(
     // 1=top (high E) which matches the project's stringId convention.
     let tabVoice: any = null;
     let tabNotes: any[] = [];
-    if (showTab && tabStave) {
+    if (showTab) {
       tabNotes = rowNotes.map(n =>
         new Flow.TabNote({
           positions: [{ str: n.stringId, fret: n.fret }],
@@ -392,25 +396,89 @@ export function renderScaleEl(
       tabVoice.addTickables(tabNotes);
     }
 
+    return { rowNotes, staveNotes, voice, tabVoice, tabNotes, start };
+  });
+
+  // Ask the formatter for the minimum note-region width across all rows.
+  // This already accounts for accidentals + glyph spacing, so dense rows
+  // (G# minor descending, anything with lots of chromatics + fingerings)
+  // contribute their true cost here.
+  let minNoteRegion = 0;
+  for (const r of builtRows) {
+    const voices = r.tabVoice ? [r.voice, r.tabVoice] : [r.voice];
+    try {
+      const fmt = new Flow.Formatter();
+      fmt.joinVoices(voices);
+      const w = fmt.preCalculateMinTotalWidth(voices);
+      if (w > minNoteRegion) minNoteRegion = w;
+    } catch {}
+  }
+  const formatPad = 20; // breathing room past the bare minimum
+  minNoteRegion = Math.ceil(minNoteRegion + formatPad);
+
+  // Pick the SVG width. If the requested width can't fit the content, we
+  // render at the intrinsic width and shrink the SVG via viewBox below.
+  const intrinsicWidth = staveX * 2 + leadWidth + minNoteRegion + rightPad;
+  const renderWidth = Math.max(requestedWidth, intrinsicWidth);
+  if (renderWidth !== requestedWidth) {
+    renderer.resize(renderWidth, height);
+    ctx.setFont('Arial', 10, '').setBackgroundFillStyle('#ffffff');
+  }
+  const staveWidth = renderWidth - 20;
+  const noteRegion = staveWidth - leadWidth - rightPad;
+
+  builtRows.forEach((r, rowIdx) => {
+    const yTop = topPad + rowIdx * (rowHeight + rowGap);
+
+    const stave = new Flow.Stave(staveX, yTop, staveWidth);
+    stave.addClef('treble').addKeySignature(keySpec);
+    stave.setContext(ctx).draw();
+
+    let tabStave: any = null;
+    if (showTab) {
+      tabStave = new Flow.TabStave(staveX, yTop + staveHeight + tabGap, staveWidth);
+      tabStave.addClef('tab').setNumLines(6);
+      tabStave.setContext(ctx).draw();
+      // Treble's lead (clef + key signature) is wider than the tab clef, so
+      // each voice would otherwise draw against a different note-start X and
+      // the columns drift. Force the tab stave's note region to begin at the
+      // same X as the treble's. Must run AFTER draw so format() doesn't
+      // overwrite our value.
+      tabStave.setNoteStartX(stave.getNoteStartX());
+    }
+
     // Dim played notes (and their TAB twins) using the same gray as melody.
     // playedCount is global across all rows — convert to row-local index.
-    for (let i = 0; i < staveNotes.length; i++) {
-      if (start + i >= playedCount) break;
-      staveNotes[i].setStyle(DIM_STYLE);
+    for (let i = 0; i < r.staveNotes.length; i++) {
+      if (r.start + i >= playedCount) break;
+      r.staveNotes[i].setStyle(DIM_STYLE);
       try {
-        const mods = staveNotes[i].getModifiers();
+        const mods = r.staveNotes[i].getModifiers();
         mods.forEach((m: any) => { try { m.setStyle?.(DIM_STYLE); } catch {} });
       } catch {}
-      if (tabNotes[i]) tabNotes[i].setStyle(DIM_STYLE);
+      if (r.tabNotes[i]) r.tabNotes[i].setStyle(DIM_STYLE);
     }
 
     const formatter = new Flow.Formatter();
-    if (tabVoice) {
-      formatter.joinVoices([voice, tabVoice]).format([voice, tabVoice], staveWidth - 80);
+    if (r.tabVoice) {
+      formatter.joinVoices([r.voice, r.tabVoice]).format([r.voice, r.tabVoice], noteRegion);
     } else {
-      formatter.joinVoices([voice]).format([voice], staveWidth - 80);
+      formatter.joinVoices([r.voice]).format([r.voice], noteRegion);
     }
-    voice.draw(ctx, stave);
-    if (tabVoice && tabStave) tabVoice.draw(ctx, tabStave);
+    r.voice.draw(ctx, stave);
+    if (r.tabVoice && tabStave) r.tabVoice.draw(ctx, tabStave);
   });
+
+  // If the content needed more room than requested, scale the SVG down so
+  // it occupies the requested footprint instead of overflowing the layout.
+  if (renderWidth > requestedWidth) {
+    const svg = container.querySelector('svg');
+    if (svg) {
+      svg.setAttribute('viewBox', `0 0 ${renderWidth} ${height}`);
+      svg.setAttribute('width', String(requestedWidth));
+      const scaledHeight = Math.round(height * (requestedWidth / renderWidth));
+      svg.setAttribute('height', String(scaledHeight));
+      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    }
+  }
 }
