@@ -38,8 +38,7 @@ export class ScalesComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private service = inject(PitchDetectService);
 
-  protected majorGroups = scalesGroupedByPattern('Major');
-  protected minorGroups = scalesGroupedByPattern('MelodicMinor');
+  protected patternGroups = scalesGroupedByPattern();
 
   protected form;
 

@@ -12,23 +12,12 @@
       <div class="qz-config-col" role="group" aria-labelledby="sc-lbl-scale">
         <div>
           <span id="sc-lbl-scale" class="qz-field-lbl">Scale</span>
-          <p class="qz-field-hint">Grouped by Segovia pattern. Disabled options will be filled in later.</p>
+          <p class="qz-field-hint">Grouped by Segovia pattern.</p>
           <select formControlName="scaleId" class="sc-scale-select">
-            @for (g of majorGroups; track g.patternId) {
-              <optgroup [label]="'Major — ' + g.patternLabel">
+            @for (g of patternGroups; track g.patternId) {
+              <optgroup [label]="g.patternLabel">
                 @for (s of g.scales; track s.id) {
-                  <option [value]="s.id" [disabled]="!s.enabled">
-                    {{ scaleLabelOf(s.id) }}{{ s.enabled ? '' : ' (coming soon)' }}
-                  </option>
-                }
-              </optgroup>
-            }
-            @for (g of minorGroups; track g.patternId) {
-              <optgroup [label]="'Melodic Minor — ' + g.patternLabel">
-                @for (s of g.scales; track s.id) {
-                  <option [value]="s.id" [disabled]="!s.enabled">
-                    {{ scaleLabelOf(s.id) }}{{ s.enabled ? '' : ' (coming soon)' }}
-                  </option>
+                  <option [value]="s.id">{{ scaleLabelOf(s.id) }}</option>
                 }
               </optgroup>
             }
