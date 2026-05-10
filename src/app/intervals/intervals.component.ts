@@ -68,6 +68,12 @@ export class IntervalsComponent implements OnDestroy {
 
   protected progressLabel = () => Math.min(this.cycleIdx() + 1, this.cfg()?.iterations ?? 0);
 
+  protected stringLabel(s: number): string {
+    if (s === 6) return 'High E (6)';
+    if (s === 1) return 'Low E (1)';
+    return `String ${s}`;
+  }
+
   private activeDet: { start: () => Promise<void>; stop: () => void } | null = null;
 
   constructor() {

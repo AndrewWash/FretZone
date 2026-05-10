@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 
-export type PitchData = { hz: number };
+export type PitchData = { hz: number; rms: number };
 export type Unsubscribe = () => void;
 
 @Injectable({ providedIn: 'root' })
@@ -8,6 +8,7 @@ export class PitchDetectService {
   private scriptLoaded: Promise<void> | null = null;
   private rafId: number | null = null;
   private subscribers = new Set<(d: PitchData) => void>();
+  private frameSubscribers = new Set<(d: PitchData) => void>();
 
   private ensureLoaded(): Promise<void> {
     if (this.scriptLoaded) return this.scriptLoaded;
@@ -70,6 +71,14 @@ export class PitchDetectService {
     return () => { this.subscribers.delete(cb); };
   }
 
+  // Fires every audio frame, including frames where no pitch was detected
+  // (hz === 0). Use this when you need amplitude (rms) continuity to detect
+  // onsets or silences between notes.
+  subscribeFrames(cb: (d: PitchData) => void): Unsubscribe {
+    this.frameSubscribers.add(cb);
+    return () => { this.frameSubscribers.delete(cb); };
+  }
+
   private startReaderLoop() {
     if (this.rafId != null) return;
     const w = window as any;
@@ -83,11 +92,16 @@ export class PitchDetectService {
           const size = analyser.fftSize || 2048;
           const buf = new Float32Array(size);
           analyser.getFloatTimeDomainData(buf);
-          const hz = autoCorrelate(buf, ac.sampleRate);
-          if (hz && hz > 0 && isFinite(hz)) {
-            const payload = { hz };
+          let sumSq = 0;
+          for (let i = 0; i < size; i++) sumSq += buf[i] * buf[i];
+          const rms = Math.sqrt(sumSq / size);
+          const rawHz = autoCorrelate(buf, ac.sampleRate);
+          const hz = rawHz && rawHz > 0 && isFinite(rawHz) ? rawHz : 0;
+          const payload: PitchData = { hz, rms };
+          if (hz > 0) {
             this.subscribers.forEach(fn => { try { fn(payload); } catch {} });
           }
+          this.frameSubscribers.forEach(fn => { try { fn(payload); } catch {} });
         }
       } catch {}
       this.rafId = requestAnimationFrame(step);

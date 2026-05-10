@@ -14,4 +14,8 @@ export const routes: Routes = [
     path: 'tuner',
     loadComponent: () => import('./tuner/tuner.component').then(m => m.TunerComponent),
   },
+  {
+    path: 'melody',
+    loadComponent: () => import('./melody/melody.component').then(m => m.MelodyComponent),
+  },
 ];
