@@ -695,3 +695,40 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
 .qz-done-restart {
   margin-top: 2rem;
 }
+
+/* ══════════════════════════════════════════════
+   MELODY — staff & running layout
+══════════════════════════════════════════════ */
+.mel-staff-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 1.75rem 1.25rem 0.5rem;
+  background: var(--fz-s1);
+}
+
+.mel-staff-host {
+  background: oklch(0.97 0.005 285);
+  border-radius: var(--fz-radius);
+  padding: 0.5rem;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.mel-staff-host svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.mel-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+}
+@media (max-width: 679px) {
+  .mel-stats {
+    grid-template-columns: 1fr;
+  }
+}
+

@@ -1,0 +1,161 @@
+@if (phase() === 'setup') {
+  <form [formGroup]="form" (ngSubmit)="start()" autocomplete="off" class="qz-setup">
+    <div class="qz-setup-head">
+      <h2 class="qz-setup-title">Melody</h2>
+      <span class="qz-setup-badge">Setup</span>
+    </div>
+
+    <div class="qz-config-grid">
+      <div class="qz-config-col" role="group" aria-labelledby="ml-lbl-key">
+        <div>
+          <span id="ml-lbl-key" class="qz-field-lbl">Difficulty</span>
+          <p class="qz-field-hint">Easy = 8 quarter notes. Intermediate = mixed rhythms with rests.</p>
+          <div class="qz-inline">
+            <label class="qz-opt-row">
+              <input type="radio" formControlName="difficulty" value="Easy" /> Easy
+            </label>
+            <label class="qz-opt-row">
+              <input type="radio" formControlName="difficulty" value="Intermediate" /> Intermediate
+            </label>
+          </div>
+        </div>
+        <div>
+          <span class="qz-field-lbl">Key</span>
+          <div class="qz-inline">
+            <label>
+              Tonic
+              <select formControlName="tonic" class="qz-num">
+                @for (t of baseLetters; track t) {
+                  <option [value]="t">{{ t }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              Mode
+              <select formControlName="mode">
+                @for (m of modeNames; track m) {
+                  <option [value]="m">{{ modeLabel(m) }}</option>
+                }
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="qz-config-col" role="group" aria-labelledby="ml-lbl-fret">
+        <div>
+          <span id="ml-lbl-fret" class="qz-field-lbl">Fret range</span>
+          <p class="qz-field-hint">Open strings always included</p>
+          <div class="qz-inline">
+            <label>Start <input type="number" min="1" max="16" formControlName="fretStart" class="qz-num" /></label>
+            <label>End <input type="number" min="1" max="16" formControlName="fretEnd" class="qz-num" /></label>
+          </div>
+        </div>
+        <div>
+          <span id="ml-lbl-bars" class="qz-field-lbl">Phrase length</span>
+          <p class="qz-field-hint">Longer phrases use a half-cadence at the midpoint, resolving to tonic at the end.</p>
+          <div class="qz-inline" role="radiogroup" aria-labelledby="ml-lbl-bars">
+            @for (n of barOptions; track n) {
+              <label class="qz-opt-row">
+                <input type="radio" formControlName="bars" [value]="n" /> {{ n }} bars
+              </label>
+            }
+          </div>
+        </div>
+        <div>
+          <span class="qz-field-lbl">Iterations</span>
+          <input type="number" min="1" max="200" formControlName="iterations" class="qz-num" />
+        </div>
+      </div>
+
+      <div class="qz-config-col" role="group" aria-labelledby="ml-lbl-opts">
+        <span id="ml-lbl-opts" class="qz-field-lbl">Options</span>
+        <label class="qz-opt-row">A4 (Hz) <input type="number" min="400" max="480" step="0.1" formControlName="a4" class="qz-num" /></label>
+        <label class="qz-opt-row">Tolerance (cents) <input type="number" min="5" max="50" step="1" formControlName="centsTolerance" class="qz-num" /></label>
+      </div>
+    </div>
+
+    <fieldset class="qz-section">
+      <legend class="qz-sr">Strings</legend>
+      <div class="qz-section-label" aria-hidden="true">
+        <span class="qz-section-num">01</span>
+        <span class="qz-section-title">Strings</span>
+      </div>
+      <div class="qz-chips" formArrayName="strings">
+        @for (ctrl of stringsArr.controls; track $index) {
+          <label class="qz-chip">
+            <input type="checkbox" [formControlName]="$index" />
+            <span class="qz-chip-label">{{ stringLabel($index + 1) }}</span>
+          </label>
+        }
+      </div>
+    </fieldset>
+
+    <div class="qz-action">
+      <button type="submit" class="qz-start" [disabled]="poolCount() < 2">
+        Start Melody <span class="qz-start-arrow" aria-hidden="true">→</span>
+      </button>
+      <span class="qz-pool-count">{{ poolCount() }} scale tones available</span>
+      @if (poolCount() < 2) {
+        <span class="qz-pool-err" role="alert">Not enough notes: widen fret range or pick different key/mode</span>
+      }
+    </div>
+  </form>
+}
+
+@if (phase() === 'running' && cfg(); as c) {
+  <div class="qz-run">
+    <div class="qz-run-head">
+      <h2 class="qz-run-title">
+        Melody
+        <span class="qz-progress-pip">{{ idx() }} / {{ c.iterations }}</span>
+        <span class="qz-progress-pip">{{ c.tonic }} {{ c.mode }}</span>
+      </h2>
+      <div class="qz-run-actions">
+        <button class="secondary" (click)="stopAndReset()">Stop</button>
+        <button (click)="startMic()" [disabled]="micStarted()">Start Mic</button>
+      </div>
+    </div>
+
+    <div class="mel-staff-wrap">
+      @if (phrase(); as ph) {
+        <app-melody-staff
+          [bars]="ph.bars"
+          [playedCount]="playedCount()"
+          [tonic]="c.tonic"
+          [mode]="c.mode"
+          [width]="staffWidth()" />
+      }
+    </div>
+
+    <div class="mel-stats">
+      <div class="qz-stat-block">
+        <div class="qz-stat-label">Heard</div>
+        <div class="qz-stat-value">{{ heard() }}</div>
+      </div>
+      <div class="qz-stat-block">
+        <div class="qz-stat-label">Status</div>
+        <div class="qz-stat-value" aria-live="polite">{{ status() }}</div>
+      </div>
+      <div class="qz-stat-block">
+        <div class="qz-stat-label">Notes</div>
+        <div class="qz-stat-value">{{ playedCount() }} / {{ phrase()?.noteMidis?.length ?? 0 }}</div>
+      </div>
+    </div>
+  </div>
+}
+
+@if (phase() === 'done' && cfg(); as c) {
+  <div class="qz-done" role="main" aria-label="Melody complete">
+    <p class="qz-done-eyebrow">Session complete</p>
+    <p class="qz-done-score" aria-label="{{ score() }} of {{ c.iterations }} phrases">
+      {{ score() }}<span class="qz-done-denom"> / {{ c.iterations }}</span>
+    </p>
+    <p class="qz-done-sub">
+      {{ score() === c.iterations ? 'Every phrase, clean.' : score() === 0 ? 'Keep practicing.' : 'Nicely played.' }}
+    </p>
+    <div class="qz-done-restart">
+      <button (click)="reset()">Try again</button>
+    </div>
+  </div>
+}
