@@ -1,0 +1,131 @@
+@if (phase() === 'setup') {
+  <form [formGroup]="form" (ngSubmit)="start()" autocomplete="off" class="qz-setup">
+    <div class="qz-setup-head">
+      <div class="qz-setup-titles">
+        <h2 class="qz-setup-title">Scales</h2>
+        <p class="qz-setup-sub">Segovia Scales</p>
+      </div>
+      <span class="qz-setup-badge">Setup</span>
+    </div>
+
+    <div class="qz-config-grid">
+      <div class="qz-config-col" role="group" aria-labelledby="sc-lbl-scale">
+        <div>
+          <span id="sc-lbl-scale" class="qz-field-lbl">Scale</span>
+          <p class="qz-field-hint">Grouped by Segovia pattern.</p>
+          <select formControlName="scaleId" class="sc-scale-select">
+            @for (g of patternGroups; track g.patternId) {
+              <optgroup [label]="g.patternLabel">
+                @for (s of g.scales; track s.id) {
+                  <option [value]="s.id">{{ scaleLabelOf(s.id) }}</option>
+                }
+              </optgroup>
+            }
+          </select>
+        </div>
+      </div>
+
+      <div class="qz-config-col" role="group" aria-labelledby="sc-lbl-display">
+        <div>
+          <span id="sc-lbl-display" class="qz-field-lbl">Display</span>
+          <label class="qz-opt-row">
+            <input type="checkbox" formControlName="showTab" /> Show TAB
+          </label>
+          <label class="qz-opt-row">
+            <input type="checkbox" formControlName="showFingerings" /> Show LH fingerings
+          </label>
+        </div>
+        <div>
+          <span class="qz-field-lbl">Iterations</span>
+          <input type="number" min="1" max="200" formControlName="iterations" class="qz-num" />
+        </div>
+      </div>
+
+      <div class="qz-config-col" role="group" aria-labelledby="sc-lbl-opts">
+        <span id="sc-lbl-opts" class="qz-field-lbl">Audio</span>
+        <label class="qz-opt-row">A4 (Hz) <input type="number" min="400" max="480" step="0.1" formControlName="a4" class="qz-num" /></label>
+        <label class="qz-opt-row">Tolerance (cents) <input type="number" min="5" max="50" step="1" formControlName="centsTolerance" class="qz-num" /></label>
+      </div>
+    </div>
+
+    <div class="qz-action">
+      <button type="submit" class="qz-start">
+        Start Scale <span class="qz-start-arrow" aria-hidden="true">→</span>
+      </button>
+    </div>
+  </form>
+}
+
+@if (phase() === 'running' && cfg(); as c) {
+  <div class="qz-run">
+    <div class="qz-run-head">
+      <h2 class="qz-run-title">
+        Scales
+        <span class="qz-progress-pip">{{ iterationIdx() }} / {{ c.iterations }}</span>
+        <span class="qz-progress-pip">{{ playedCount() }} / {{ run()?.midis?.length ?? 0 }}</span>
+        <span class="qz-progress-pip">{{ scaleTitle() }}</span>
+      </h2>
+      <div class="qz-run-actions">
+        <button class="secondary" (click)="stopAndReset()">Stop</button>
+        <button (click)="startMic()" [disabled]="micStarted()">Start Mic</button>
+      </div>
+    </div>
+
+    <div class="mel-staff-wrap">
+      @if (run(); as r) {
+        <app-scale-staff
+          [notes]="r.full"
+          [playedCount]="playedCount()"
+          [tonic]="staffTonic()"
+          [tonicOffset]="staffTonicOffset()"
+          [mode]="staffMode()"
+          [showTab]="c.showTab"
+          [showFingerings]="c.showFingerings"
+          [rowBreaks]="staffRowBreaks()"
+          [isMelodicMinor]="staffIsMelodicMinor()"
+          [width]="960" />
+      }
+    </div>
+
+    <div class="scl-diagrams">
+      <app-fretboard-diagram
+        [dots]="ascendingDots()"
+        [caption]="scaleTitle() + ' (Ascending)'"
+        [startFret]="diagramStartFret()"
+        [fretCount]="diagramFretCount()"
+        [fretGap]="diagramFretGap()" />
+      <app-fretboard-diagram
+        [dots]="descendingDots()"
+        [caption]="scaleTitle() + ' (Descending)'"
+        [startFret]="diagramStartFret()"
+        [fretCount]="diagramFretCount()"
+        [fretGap]="diagramFretGap()" />
+    </div>
+
+    <div class="mel-stats">
+      <div class="qz-stat-block">
+        <div class="qz-stat-label">Heard</div>
+        <div class="qz-stat-value">{{ heard() }}</div>
+      </div>
+      <div class="qz-stat-block">
+        <div class="qz-stat-label">Status</div>
+        <div class="qz-stat-value" aria-live="polite">{{ status() }}</div>
+      </div>
+      <div class="qz-stat-block">
+        <div class="qz-stat-label">Notes</div>
+        <div class="qz-stat-value">{{ playedCount() }} / {{ run()?.midis?.length ?? 0 }}</div>
+      </div>
+    </div>
+  </div>
+}
+
+@if (phase() === 'done') {
+  <div class="qz-done" role="main" aria-label="Scale complete">
+    <p class="qz-done-eyebrow">Scale complete</p>
+    <p class="qz-done-score">{{ scaleTitle() }}</p>
+    <p class="qz-done-sub">Clean run, top to bottom.</p>
+    <div class="qz-done-restart">
+      <button (click)="reset()">Try again</button>
+    </div>
+  </div>
+}

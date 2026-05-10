@@ -1,0 +1,82 @@
+@if (caption(); as cap) {
+  <div class="fb-caption">{{ cap }}</div>
+}
+<svg
+  class="fb-svg"
+  [attr.viewBox]="'0 0 ' + width() + ' ' + height()"
+  [attr.width]="width()"
+  [attr.height]="height()"
+  role="img"
+  [attr.aria-label]="caption()">
+  @for (y of stringYs(); track $index) {
+    <line
+      class="fb-string"
+      [attr.x1]="26"
+      [attr.x2]="width() - 18"
+      [attr.y1]="y"
+      [attr.y2]="y" />
+  }
+  @for (x of fretXs(); track $index) {
+    @if ($index === 0) {
+      <line
+        class="fb-nut"
+        [attr.x1]="x"
+        [attr.x2]="x"
+        [attr.y1]="stringYs()[0]"
+        [attr.y2]="stringYs()[5]" />
+    } @else {
+      <line
+        class="fb-fret"
+        [attr.x1]="x"
+        [attr.x2]="x"
+        [attr.y1]="stringYs()[0]"
+        [attr.y2]="stringYs()[5]" />
+    }
+  }
+  @for (label of fretLabels(); track $index) {
+    <text
+      class="fb-fret-label"
+      [attr.x]="label.x"
+      [attr.y]="height() - 4"
+      text-anchor="middle">{{ label.text }}</text>
+  }
+  @for (d of renderedDots(); track $index) {
+    @switch (d.kind) {
+      @case ('reference') {
+        <circle
+          class="fb-dot-ref"
+          [attr.cx]="d.cx"
+          [attr.cy]="d.cy"
+          r="6.5" />
+      }
+      @case ('tonic') {
+        <circle
+          class="fb-dot-tonic"
+          [attr.cx]="d.cx"
+          [attr.cy]="d.cy"
+          r="7.5" />
+        @if (d.label) {
+          <text
+            class="fb-dot-tonic-label"
+            [attr.x]="d.cx"
+            [attr.y]="d.cy + 3"
+            text-anchor="middle">{{ d.label }}</text>
+        }
+      }
+      @case ('fingering') {
+        <circle
+          class="fb-dot-finger"
+          [attr.cx]="d.cx"
+          [attr.cy]="d.cy"
+          r="7.5" />
+        @if (d.label) {
+          <text
+            class="fb-dot-finger-label"
+            [attr.x]="d.cx"
+            [attr.y]="d.cy + 3"
+            text-anchor="middle">{{ d.label }}</text>
+        }
+      }
+    }
+  }
+</svg>

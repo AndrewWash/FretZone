@@ -34,7 +34,7 @@ export function playablePool(cfg: MelodyConfig): PlayablePool {
   const pcs = new Set(scalePitchClasses(cfg.tonic, cfg.mode));
   const strings: StringId[] = cfg.strings.length ? cfg.strings : [1, 2, 3, 4, 5, 6];
   const start = Math.max(1, Math.min(cfg.fretStart, cfg.fretEnd));
-  const end = Math.min(16, Math.max(cfg.fretStart, cfg.fretEnd));
+  const end = Math.min(20, Math.max(cfg.fretStart, cfg.fretEnd));
 
   const set = new Set<number>();
   for (const s of strings) {

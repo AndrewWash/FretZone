@@ -269,8 +269,8 @@ export class IntervalsComponent implements OnDestroy {
     const stringIds = ([1,2,3,4,5,6] as (1|2|3|4|5|6)[]).filter((_, i) => v.strings[i]);
     const intervals = ALL_INTERVALS.filter((_, i) => v.intervals[i]);
     return {
-      fretStart: Math.min(16, Math.max(1, v.fretStart || 1)),
-      fretEnd: Math.min(16, Math.max(1, v.fretEnd || 5)),
+      fretStart: Math.min(20, Math.max(1, v.fretStart || 1)),
+      fretEnd: Math.min(20, Math.max(1, v.fretEnd || 5)),
       strings: stringIds.length ? stringIds : [1,2,3,4,5,6],
       intervals: intervals.length ? intervals : ALL_INTERVALS,
       direction: v.direction,

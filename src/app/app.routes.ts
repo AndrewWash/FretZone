@@ -18,4 +18,8 @@ export const routes: Routes = [
     path: 'melody',
     loadComponent: () => import('./melody/melody.component').then(m => m.MelodyComponent),
   },
+  {
+    path: 'scales',
+    loadComponent: () => import('./scales/scales.component').then(m => m.ScalesComponent),
+  },
 ];
