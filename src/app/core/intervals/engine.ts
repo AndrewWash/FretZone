@@ -51,7 +51,7 @@ export function allPlayable(cfg: IntervalConfig): FretPos[] {
     res.push({ stringId: s as any, fret: 0, midi: m });
   }
   const start = Math.max(1, Math.min(cfg.fretStart, cfg.fretEnd));
-  const end = Math.min(16, Math.max(cfg.fretStart, cfg.fretEnd));
+  const end = Math.min(20, Math.max(cfg.fretStart, cfg.fretEnd));
   for (const s of strings) {
     const base = STANDARD_TUNING_MIDI[s-1];
     for (let f = start; f <= end; f++) res.push({ stringId: s as any, fret: f, midi: base + f });

@@ -732,3 +732,114 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
   }
 }
 
+/* ══════════════════════════════════════════════
+   SCALES — page-specific extensions
+══════════════════════════════════════════════ */
+.qz-setup-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.qz-setup-sub {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--fz-t3);
+  letter-spacing: 0.02em;
+}
+
+.scl-staff-host {
+  background: #ffffff;
+  border-radius: var(--fz-radius);
+  padding: 0.5rem;
+  width: 100%;
+  overflow-x: auto;
+}
+.scl-staff-host svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.sc-scale-select {
+  width: 100%;
+  max-width: 24rem;
+}
+
+.scl-diagrams {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  padding: 0.75rem 1.25rem 1rem;
+  background: var(--fz-s1);
+}
+@media (min-width: 860px) {
+  .scl-diagrams {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.fb-caption {
+  font-family: var(--fz-display);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--fz-t1);
+  margin-bottom: 0.4rem;
+}
+
+.fb-svg {
+  background: oklch(0.97 0.005 285);
+  border-radius: var(--fz-radius-sm);
+  padding: 0.5rem;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+
+.fb-string {
+  stroke: oklch(0.45 0.012 258);
+  stroke-width: 1.2;
+}
+.fb-fret {
+  stroke: oklch(0.55 0.012 258);
+  stroke-width: 1;
+}
+.fb-nut {
+  stroke: oklch(0.18 0.012 258);
+  stroke-width: 3.2;
+}
+.fb-fret-label {
+  fill: oklch(0.45 0.012 258);
+  font-family: var(--fz-body);
+  font-size: 9px;
+  font-weight: 500;
+}
+.fb-dot-finger {
+  fill: oklch(0.18 0.012 258);
+  stroke: oklch(0.18 0.012 258);
+  stroke-width: 1;
+}
+.fb-dot-finger-label {
+  fill: oklch(0.97 0.005 285);
+  font-family: var(--fz-body);
+  font-size: 10px;
+  font-weight: 700;
+}
+.fb-dot-tonic {
+  fill: oklch(0.97 0.005 285);
+  stroke: oklch(0.18 0.012 258);
+  stroke-width: 2;
+}
+.fb-dot-tonic-label {
+  fill: oklch(0.18 0.012 258);
+  font-family: var(--fz-body);
+  font-size: 10px;
+  font-weight: 700;
+}
+.fb-dot-ref {
+  fill: none;
+  stroke: oklch(0.65 0.012 258);
+  stroke-width: 1.2;
+}
+

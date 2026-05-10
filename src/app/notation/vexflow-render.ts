@@ -228,3 +228,133 @@ function toMelodyStaveNote(t: MelodyTickable, tonic: BaseLetter, mode: ModeName)
   // level decides which glyphs to draw vs. let the key signature speak.
   return new Flow.StaveNote({ keys: [sp.key], duration: t.duration, clef: 'treble' });
 }
+
+// ── Scale renderer ────────────────────────────────────────────────────────
+// Renders a single ascending+descending scale on one row, with optional
+// TAB staff and optional left-hand fingering modifiers. Notes are dimmed
+// progressively as the player advances.
+
+export interface ScaleRenderNote {
+  midi: number;             // sounding MIDI
+  stringId: 1 | 2 | 3 | 4 | 5 | 6;
+  fret: number;
+  finger: 1 | 2 | 3 | 4 | null;
+}
+
+export interface ScaleRenderOptions {
+  width?: number;
+  showTab?: boolean;
+  showFingerings?: boolean;
+  tonic?: BaseLetter;
+  mode?: ModeName;
+}
+
+export function renderScaleEl(
+  container: HTMLElement,
+  notes: ScaleRenderNote[],
+  playedCount: number,
+  opts: ScaleRenderOptions = {},
+) {
+  const width = opts.width ?? 960;
+  const tonic: BaseLetter = opts.tonic ?? 'C';
+  const mode: ModeName = opts.mode ?? 'Ionian';
+  const showTab = !!opts.showTab;
+  const showFingerings = !!opts.showFingerings;
+  const keySpec = keySignatureSpec(tonic, mode);
+  container.innerHTML = '';
+
+  // Layout: clef + key sig at left; one big formatter spans all notes; height
+  // depends on whether TAB is present.
+  const topPad = 30;
+  const staveHeight = 100;
+  const tabGap = 10;
+  const tabHeight = showTab ? 110 : 0;
+  const bottomPad = 20;
+  const height = topPad + staveHeight + tabGap + tabHeight + bottomPad;
+
+  const renderer = new Flow.Renderer(container as HTMLDivElement, Flow.Renderer.Backends.SVG);
+  renderer.resize(width, height);
+  const ctx = renderer.getContext();
+  // White bg fill so the small rectangle VexFlow draws behind each TAB
+  // fret number disappears against the (white) staff host background.
+  ctx.setFont('Arial', 10, '').setBackgroundFillStyle('#ffffff');
+
+  const staveX = 10;
+  const staveWidth = width - 20;
+
+  const stave = new Flow.Stave(staveX, topPad, staveWidth);
+  stave.addClef('treble').addKeySignature(keySpec);
+  stave.setContext(ctx).draw();
+
+  let tabStave: any = null;
+  if (showTab) {
+    tabStave = new Flow.TabStave(staveX, topPad + staveHeight + tabGap, staveWidth);
+    tabStave.addClef('tab').setNumLines(6);
+    tabStave.setContext(ctx).draw();
+  }
+
+  // Notation voice — each scale tone as a quarter note.
+  const staveNotes = notes.map(n => {
+    const written = n.midi + 12; // sounding → written (treble guitar is octave-up notation)
+    const sp = keyAwareSpelling(written, tonic, mode);
+    const sn = new Flow.StaveNote({ keys: [sp.key], duration: 'q', clef: 'treble' });
+    if (showFingerings && n.finger != null) {
+      const fhf = new Flow.FretHandFinger(String(n.finger));
+      // FretHandFinger defaults to Position.BELOW which is what we want; if
+      // the enum is exposed, prefer it explicitly so future VexFlow updates
+      // can't change the default.
+      try {
+        const pos = (Flow as any).Modifier?.Position?.BELOW;
+        if (pos != null) fhf.setPosition(pos);
+      } catch {}
+      sn.addModifier(fhf, 0);
+    }
+    return sn;
+  });
+
+  // VexFlow's Voice expects beat math to add up. For an arbitrary-length
+  // scale, use SOFT mode so the formatter accepts any tickable count.
+  const voice = new Flow.Voice({ num_beats: notes.length, beat_value: 4 });
+  voice.setMode(Flow.Voice.Mode.SOFT);
+  voice.addTickables(staveNotes);
+
+  // Apply key-signature-aware accidentals before formatting.
+  try {
+    Flow.Accidental.applyAccidentals([voice], keySpec);
+  } catch {}
+
+  // TAB voice mirrors the notation. Strings in VexFlow's TabNote are numbered
+  // 1=top (high E) which matches the project's stringId convention.
+  let tabVoice: any = null;
+  let tabNotes: any[] = [];
+  if (showTab && tabStave) {
+    tabNotes = notes.map(n =>
+      new Flow.TabNote({
+        positions: [{ str: n.stringId, fret: n.fret }],
+        duration: 'q',
+      }),
+    );
+    tabVoice = new Flow.Voice({ num_beats: notes.length, beat_value: 4 });
+    tabVoice.setMode(Flow.Voice.Mode.SOFT);
+    tabVoice.addTickables(tabNotes);
+  }
+
+  // Dim played notes (and their TAB twins) using the same gray as melody.
+  for (let i = 0; i < playedCount && i < staveNotes.length; i++) {
+    staveNotes[i].setStyle(DIM_STYLE);
+    try {
+      const mods = staveNotes[i].getModifiers();
+      mods.forEach((m: any) => { try { m.setStyle?.(DIM_STYLE); } catch {} });
+    } catch {}
+    if (tabNotes[i]) tabNotes[i].setStyle(DIM_STYLE);
+  }
+
+  const formatter = new Flow.Formatter();
+  if (tabVoice) {
+    formatter.joinVoices([voice, tabVoice]).format([voice, tabVoice], staveWidth - 80);
+  } else {
+    formatter.joinVoices([voice]).format([voice], staveWidth - 80);
+  }
+  voice.draw(ctx, stave);
+  if (tabVoice && tabStave) tabVoice.draw(ctx, tabStave);
+}

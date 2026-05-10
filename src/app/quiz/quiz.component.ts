@@ -277,8 +277,8 @@ export class QuizComponent implements OnDestroy {
     const stringIds = ([1, 2, 3, 4, 5, 6] as StringId[]).filter((_, i) => v.strings[i]);
     const notes = this.baseLetters.filter((_, i) => v.notes[i]);
     return {
-      fretStart: Math.min(16, Math.max(1, v.fretStart || 1)),
-      fretEnd: Math.min(16, Math.max(1, v.fretEnd || 5)),
+      fretStart: Math.min(20, Math.max(1, v.fretStart || 1)),
+      fretEnd: Math.min(20, Math.max(1, v.fretEnd || 5)),
       strings: stringIds.length ? stringIds : [1, 2, 3, 4, 5, 6],
       notes: notes.length ? notes : [...BASE_LETTERS],
       accidentalMode: v.accidentalMode,
