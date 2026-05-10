@@ -92,21 +92,24 @@
           [showTab]="c.showTab"
           [showFingerings]="c.showFingerings"
           [rowBreaks]="staffRowBreaks()"
+          [isMelodicMinor]="staffIsMelodicMinor()"
           [width]="960" />
       }
     </div>
 
-    <div class="scl-diagrams" [class.scl-diagrams-stacked]="diagramsStacked()">
+    <div class="scl-diagrams">
       <app-fretboard-diagram
         [dots]="ascendingDots()"
         [caption]="scaleTitle() + ' (Ascending)'"
         [startFret]="diagramStartFret()"
-        [fretCount]="diagramFretCount()" />
+        [fretCount]="diagramFretCount()"
+        [fretGap]="diagramFretGap()" />
       <app-fretboard-diagram
         [dots]="descendingDots()"
         [caption]="scaleTitle() + ' (Descending)'"
         [startFret]="diagramStartFret()"
-        [fretCount]="diagramFretCount()" />
+        [fretCount]="diagramFretCount()"
+        [fretGap]="diagramFretGap()" />
     </div>
 
     <div class="mel-stats">

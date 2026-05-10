@@ -73,6 +73,8 @@ export class ScalesComponent implements OnDestroy {
     return e ? qualityToMode(e.quality) : 'Ionian';
   });
 
+  protected staffIsMelodicMinor = computed(() => this.scaleEntry()?.quality === 'MelodicMinor');
+
   protected ascendingDots = computed<FretboardDot[]>(() => {
     const r = this.run();
     const e = this.scaleEntry();
@@ -108,14 +110,6 @@ export class ScalesComponent implements OnDestroy {
     return r.full.length > 30 ? [r.ascending.length] : [];
   });
 
-  // Stack the asc/desc fretboard diagrams for 3-octave scales (their wider
-  // fret window squashes side-by-side); keep them side-by-side for the
-  // shorter 2-octave patterns where the diagrams have room.
-  protected diagramsStacked = computed(() => {
-    const r = this.run();
-    return !!r && r.full.length > 30;
-  });
-
   protected diagramFretCount = computed(() => {
     const r = this.run();
     if (!r) return 8;
@@ -124,6 +118,12 @@ export class ScalesComponent implements OnDestroy {
     const lo = Math.min(...frets);
     const hi = Math.max(...frets);
     return Math.max(6, hi - Math.max(1, lo - 1) + 2);
+  });
+
+  // Shrink the per-fret cell for wide windows (3-octave patterns span ~16
+  // frets) so the asc/desc diagrams still fit comfortably side-by-side.
+  protected diagramFretGap = computed(() => {
+    return this.diagramFretCount() > 12 ? 22 : 38;
   });
 
   private det: { start: () => Promise<void>; stop: () => void } | null = null;

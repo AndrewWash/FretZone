@@ -1,6 +1,6 @@
 import { Flow } from 'vexflow';
 import { spellMidi, AccidentalMode, BaseLetter } from '../core/theory/note';
-import { keyAwareSpelling, keySignatureSpec, ModeName } from '../core/theory/modes';
+import { keyAwareSpelling, keySignatureSpec, tonicPc, ModeName } from '../core/theory/modes';
 import type { MelodyTickable } from '../core/melody/models';
 
 export interface NotationOptions {
@@ -251,6 +251,10 @@ export interface ScaleRenderOptions {
   // own clef + key signature. Useful for 3-octave scales that look cramped
   // on a single line.
   rowBreaks?: number[];
+  // When true, rows after the first row break are treated as descending
+  // melodic minor, and cautionary natural signs are added to the lowered
+  // 6th and 7th scale degrees.
+  isMelodicMinor?: boolean;
 }
 
 export function renderScaleEl(
@@ -356,6 +360,21 @@ export function renderScaleEl(
     try {
       Flow.Accidental.applyAccidentals([voice], keySpec);
     } catch {}
+
+    // Melodic minor descending rows: add cautionary naturals for the lowered
+    // 6th and 7th. VexFlow only tracks accidentals within a single voice, so
+    // the G# / A# from the ascending row (row 0) are invisible here.
+    if (opts.isMelodicMinor && breaks.length > 0 && rowIdx > 0) {
+      const rootPc = tonicPc(tonic);
+      const nat6Pc = (rootPc + 8) % 12;
+      const nat7Pc = (rootPc + 10) % 12;
+      for (let i = 0; i < staveNotes.length; i++) {
+        const notePc = ((rowNotes[i].midi % 12) + 12) % 12;
+        if (notePc === nat6Pc || notePc === nat7Pc) {
+          staveNotes[i].addModifier(new Flow.Accidental('n'), 0);
+        }
+      }
+    }
 
     // TAB voice mirrors the notation. Strings in VexFlow's TabNote are numbered
     // 1=top (high E) which matches the project's stringId convention.

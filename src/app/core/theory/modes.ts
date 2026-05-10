@@ -155,11 +155,11 @@ export function keyAwareSpelling(midi: number, tonic: BaseLetter, mode: ModeName
   const pc = mod12(midi);
   const found = pcMap.get(pc);
   if (!found) {
-    // Chromatic note (engine doesn't currently produce these). Fall back to
-    // generic spelling biased to match the parent's accidental style.
-    const accMode = pm.accidental === 'b' ? 'FlatsPlusNaturals'
-                  : pm.accidental === '#' ? 'SharpsPlusNaturals'
-                  : 'Naturals';
+    // Chromatic note. Spell as sharp for sharp-side keys, flat otherwise.
+    // Using the root's accidental alone misses neutral roots of sharp keys
+    // (e.g. D major has pm.accidental='' but is still a sharp key).
+    const SHARP_SPECS = new Set(['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#']);
+    const accMode = SHARP_SPECS.has(pm.spec) ? 'SharpsPlusNaturals' : 'FlatsPlusNaturals';
     const sp = spellMidi(midi, accMode);
     return { key: sp.key, letter: sp.letter, accidental: sp.accidental, octave: sp.octave };
   }

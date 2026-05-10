@@ -17,6 +17,7 @@ export class ScaleStaffComponent {
   showTab = input<boolean>(false);
   showFingerings = input<boolean>(false);
   rowBreaks = input<number[]>([]);
+  isMelodicMinor = input<boolean>(false);
 
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
 
@@ -29,6 +30,7 @@ export class ScaleStaffComponent {
         showTab: this.showTab(),
         showFingerings: this.showFingerings(),
         rowBreaks: this.rowBreaks(),
+        isMelodicMinor: this.isMelodicMinor(),
       });
     });
   }
