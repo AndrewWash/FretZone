@@ -165,43 +165,48 @@ export function renderMelodyEl(
     } catch {}
   };
 
-  const formatBar = (voice: any, stave: any) => {
+  const formatBar = (voice: any, stave: any, noteRegionWidth: number) => {
     const formatter = new Flow.Formatter();
     formatter.joinVoices([voice]);
-    formatter.format([voice], Math.max(40, stave.getWidth() - 20));
+    formatter.format([voice], Math.max(40, noteRegionWidth - 20));
     voice.draw(ctx, stave);
   };
 
-  // padding for clef + key sig + time sig on the row's first stave
-  const padClef = 120;
+  // Probe the actual leading-symbol width (clef + key sig + time sig) for
+  // this key — varies with sharp/flat count. Building a hidden stave with
+  // the same modifiers and reading getNoteStartX gives the real value.
+  const probe = new Flow.Stave(0, 0, 400)
+    .addClef('treble')
+    .addKeySignature(keySpec)
+    .addTimeSignature('4/4');
+  probe.setContext(ctx);
+  let leadWidth = probe.getNoteStartX() - probe.getX();
+  if (!isFinite(leadWidth) || leadWidth < 60) leadWidth = 90;
+
+  // Equalize the *note area* of every bar — the part where notes are
+  // drawn. Bar 1 of each row is wider by exactly leadWidth so its clef +
+  // key sig + time sig sit in front of the same-sized note region. Result:
+  // all bars look visually aligned, and the last note never gets squeezed.
   const totalAvailable = width - 20;
-  const tmp = new Flow.Formatter();
 
   let voiceCursor = 0;
   rows.forEach((rowBars, rowIdx) => {
     const rowVoices = allVoices.slice(voiceCursor, voiceCursor + rowBars.length);
-    const mins = rowVoices.map(v => {
-      let m: number;
-      try { m = tmp.preCalculateMinTotalWidth([v.voice]); } catch { m = 200; }
-      if (!isFinite(m) || m <= 0) m = 200;
-      return m;
-    });
-    const totalMin = mins.reduce((a, b) => a + b, 0) + padClef;
-    const scale = totalAvailable / totalMin;
-    const widths = mins.map((m, i) => i === 0 ? (m + padClef) * scale : m * scale);
+    const noteArea = (totalAvailable - leadWidth) / rowBars.length;
 
     const yTop = topPad + rowIdx * rowHeight;
     let xCursor = 10;
     rowVoices.forEach((rv, i) => {
-      const stave = new Flow.Stave(xCursor, yTop, widths[i]);
+      const staveWidth = i === 0 ? noteArea + leadWidth : noteArea;
+      const stave = new Flow.Stave(xCursor, yTop, staveWidth);
       if (i === 0) {
         stave.addClef('treble').addKeySignature(keySpec).addTimeSignature('4/4');
       }
       stave.setContext(ctx).draw();
       dimNotes(rv.notes, rowBars[i]);
-      formatBar(rv.voice, stave);
+      formatBar(rv.voice, stave, noteArea);
       drawBeams(rv.notes, rowBars[i]);
-      xCursor += widths[i];
+      xCursor += staveWidth;
     });
     voiceCursor += rowBars.length;
   });
