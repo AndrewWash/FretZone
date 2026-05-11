@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, ElementRef, effect, input, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, effect, inject, input, viewChild } from '@angular/core';
 import { AccidentalMode } from '../core/theory/note';
+import { ThemeService } from '../core/theme/theme.service';
 import { renderTrebleNoteEl } from './vexflow-render';
 
 @Component({
@@ -14,6 +15,7 @@ export class TrebleNoteComponent {
   height = input(140);
 
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
+  private theme = inject(ThemeService);
 
   constructor() {
     effect(() => {
@@ -21,6 +23,7 @@ export class TrebleNoteComponent {
         width: this.width(),
         height: this.height(),
         accidentalMode: this.accidentalMode(),
+        theme: this.theme.notationTheme(),
       });
     });
   }

@@ -14,6 +14,7 @@ import {
   defaultIntervalConfig,
   overrideSpellingForTritone,
 } from '../core/intervals/engine';
+import { ThemeService } from '../core/theme/theme.service';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
 import { StaffComponent } from '../notation/staff.component';
 import { Spelled } from '../notation/vexflow-render';
@@ -45,6 +46,7 @@ interface IntervalFormValue {
 export class IntervalsComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private service = inject(PitchDetectService);
+  protected theme = inject(ThemeService);
 
   protected allIntervals = ALL_INTERVALS;
 
