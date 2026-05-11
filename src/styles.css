@@ -31,6 +31,54 @@
   --fz-radius:    0.5rem;
   --fz-radius-sm: 0.3rem;
   --fz-radius-lg: 0.75rem;
+
+  /* Notation theme — defaults to dark. Overridden by [data-notation-theme="light"] below. */
+  --fz-notation-bg:  #000000;
+  --fz-notation-fg:  #ffffff;
+  --fz-notation-dim: #a0a0a0;
+
+  --fz-fb-bg:           oklch(0.14 0.012 258);
+  --fz-fb-string:       oklch(0.65 0.012 258);
+  --fz-fb-fret:         oklch(0.55 0.012 258);
+  --fz-fb-nut:          oklch(0.90 0.005 258);
+  --fz-fb-fret-label:   oklch(0.65 0.012 258);
+  --fz-fb-finger-fill:  oklch(0.90 0.005 258);
+  --fz-fb-finger-label: oklch(0.14 0.012 258);
+  --fz-fb-tonic-fill:   oklch(0.14 0.012 258);
+  --fz-fb-tonic-stroke: oklch(0.90 0.005 258);
+  --fz-fb-tonic-label:  oklch(0.90 0.005 258);
+  --fz-fb-ref:          oklch(0.55 0.012 258);
+}
+
+/* Ledger lines (and any other VexFlow line elements) render thin against pure
+   black — at 1px white with anti-aliasing they read as gray. Bump stroke-width
+   in dark mode so they stay crisp. Staff lines are drawn as paths in VexFlow
+   so this targets ledger lines specifically without affecting the staff. */
+:root[data-notation-theme="dark"] .scl-staff-host svg line,
+:root[data-notation-theme="dark"] .mel-staff-host svg line,
+:root[data-notation-theme="dark"] .qz-note-wrap svg line,
+:root:not([data-notation-theme]) .scl-staff-host svg line,
+:root:not([data-notation-theme]) .mel-staff-host svg line,
+:root:not([data-notation-theme]) .qz-note-wrap svg line {
+  stroke-width: 1.5;
+}
+
+:root[data-notation-theme="light"] {
+  --fz-notation-bg:  #ffffff;
+  --fz-notation-fg:  #000000;
+  --fz-notation-dim: #5a5d6c;
+
+  --fz-fb-bg:           oklch(0.97 0.005 285);
+  --fz-fb-string:       oklch(0.45 0.012 258);
+  --fz-fb-fret:         oklch(0.55 0.012 258);
+  --fz-fb-nut:          oklch(0.18 0.012 258);
+  --fz-fb-fret-label:   oklch(0.45 0.012 258);
+  --fz-fb-finger-fill:  oklch(0.18 0.012 258);
+  --fz-fb-finger-label: oklch(0.97 0.005 285);
+  --fz-fb-tonic-fill:   oklch(0.97 0.005 285);
+  --fz-fb-tonic-stroke: oklch(0.18 0.012 258);
+  --fz-fb-tonic-label:  oklch(0.18 0.012 258);
+  --fz-fb-ref:          oklch(0.65 0.012 258);
 }
 
 /* ── Keyframes ── */
@@ -615,9 +663,22 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
 
 /* Note display */
 .qz-note-wrap {
-  margin-top: 1rem;
+  margin: 1rem auto 0;
   display: flex;
   justify-content: center;
+  width: fit-content;
+  max-width: 100%;
+  background: var(--fz-notation-bg);
+  border: 1px solid var(--fz-b0);
+  border-radius: var(--fz-radius);
+  padding: 0.75rem;
+  overflow-x: auto;
+  transition: filter 200ms ease-out;
+}
+.qz-note-wrap svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 /* Right column */
@@ -707,7 +768,8 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
 }
 
 .mel-staff-host {
-  background: oklch(0.97 0.005 285);
+  background: var(--fz-notation-bg);
+  border: 1px solid var(--fz-b0);
   border-radius: var(--fz-radius);
   padding: 0.5rem;
   max-width: 100%;
@@ -750,7 +812,8 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
 }
 
 .scl-staff-host {
-  background: #ffffff;
+  background: var(--fz-notation-bg);
+  border: 1px solid var(--fz-b0);
   border-radius: var(--fz-radius);
   padding: 0.5rem;
   width: 100%;
@@ -789,7 +852,8 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
 }
 
 .fb-svg {
-  background: oklch(0.97 0.005 285);
+  background: var(--fz-fb-bg);
+  border: 1px solid var(--fz-b0);
   border-radius: var(--fz-radius-sm);
   padding: 0.5rem;
   width: 100%;
@@ -798,48 +862,48 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
 }
 
 .fb-string {
-  stroke: oklch(0.45 0.012 258);
+  stroke: var(--fz-fb-string);
   stroke-width: 1.2;
 }
 .fb-fret {
-  stroke: oklch(0.55 0.012 258);
+  stroke: var(--fz-fb-fret);
   stroke-width: 1;
 }
 .fb-nut {
-  stroke: oklch(0.18 0.012 258);
+  stroke: var(--fz-fb-nut);
   stroke-width: 3.2;
 }
 .fb-fret-label {
-  fill: oklch(0.45 0.012 258);
+  fill: var(--fz-fb-fret-label);
   font-family: var(--fz-body);
   font-size: 9px;
   font-weight: 500;
 }
 .fb-dot-finger {
-  fill: oklch(0.18 0.012 258);
-  stroke: oklch(0.18 0.012 258);
+  fill: var(--fz-fb-finger-fill);
+  stroke: var(--fz-fb-finger-fill);
   stroke-width: 1;
 }
 .fb-dot-finger-label {
-  fill: oklch(0.97 0.005 285);
+  fill: var(--fz-fb-finger-label);
   font-family: var(--fz-body);
   font-size: 10px;
   font-weight: 700;
 }
 .fb-dot-tonic {
-  fill: oklch(0.97 0.005 285);
-  stroke: oklch(0.18 0.012 258);
+  fill: var(--fz-fb-tonic-fill);
+  stroke: var(--fz-fb-tonic-stroke);
   stroke-width: 2;
 }
 .fb-dot-tonic-label {
-  fill: oklch(0.18 0.012 258);
+  fill: var(--fz-fb-tonic-label);
   font-family: var(--fz-body);
   font-size: 10px;
   font-weight: 700;
 }
 .fb-dot-ref {
   fill: none;
-  stroke: oklch(0.65 0.012 258);
+  stroke: var(--fz-fb-ref);
   stroke-width: 1.2;
 }
 

@@ -34,6 +34,12 @@
           <label class="qz-opt-row">
             <input type="checkbox" formControlName="showFingerings" /> Show LH fingerings
           </label>
+          <label class="qz-opt-row">
+            <input type="checkbox"
+                   [checked]="theme.notationTheme() === 'dark'"
+                   (change)="theme.toggle()" />
+            Dark mode notation
+          </label>
         </div>
         <div>
           <span class="qz-field-lbl">Iterations</span>

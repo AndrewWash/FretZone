@@ -6,7 +6,9 @@
       "Bash(Get-ChildItem -Path \"C:\\\\code\\\\FretZone\" -Recurse -Directory)",
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Sort-Object)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(Get-ChildItem *)",
+      "Bash(dir C:\\\\code\\\\FretZone *)"
     ]
   }
 }

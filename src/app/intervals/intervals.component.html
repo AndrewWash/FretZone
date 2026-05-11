@@ -53,6 +53,12 @@
         <span id="iv-lbl-opts" class="qz-field-lbl">Options</span>
         <label class="qz-opt-row">A4 (Hz) <input type="number" min="400" max="480" step="0.1" formControlName="a4" class="qz-num" /></label>
         <label class="qz-opt-row">Tolerance (cents) <input type="number" min="5" max="50" step="1" formControlName="centsTolerance" class="qz-num" /></label>
+        <label class="qz-opt-row">
+          <input type="checkbox"
+                 [checked]="theme.notationTheme() === 'dark'"
+                 (change)="theme.toggle()" />
+          Dark mode notation
+        </label>
         <p class="qz-field-hint">
           Say the note and interval out loud as you play. Example: "G is a perfect fifth up from C."
         </p>

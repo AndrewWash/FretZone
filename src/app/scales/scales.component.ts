@@ -19,6 +19,7 @@ import {
   type ScaleQuality,
   type ScalesConfig,
 } from '../core/scales/models';
+import { ThemeService } from '../core/theme/theme.service';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
 import { ScaleStaffComponent } from '../notation/scale-staff.component';
 import {
@@ -37,6 +38,7 @@ const STORAGE_KEY = 'fretzone.scales.cfg.v1';
 export class ScalesComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private service = inject(PitchDetectService);
+  protected theme = inject(ThemeService);
 
   protected patternGroups = scalesGroupedByPattern();
 

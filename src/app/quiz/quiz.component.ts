@@ -6,6 +6,7 @@ import { PitchDetectService, Unsubscribe } from '../core/audio/pitch-detect.serv
 import { AccidentalMode, BASE_LETTERS, BaseLetter, enharmonicDisplay } from '../core/theory/note';
 import { allCandidates, defaultConfig, freqMatchesPrompt, randomPrompt } from '../core/quiz/engine';
 import type { Prompt, QuizConfig, StringId } from '../core/quiz/models';
+import { ThemeService } from '../core/theme/theme.service';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
 import { TrebleNoteComponent } from '../notation/treble-note.component';
 
@@ -37,6 +38,7 @@ interface QuizFormValue {
 export class QuizComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private service = inject(PitchDetectService);
+  protected theme = inject(ThemeService);
 
   protected baseLetters: BaseLetter[] = [...BASE_LETTERS];
 
@@ -230,7 +232,7 @@ export class QuizComponent implements OnDestroy {
       if (this.holdStartAt != null && now - this.holdStartAt >= HOLD_COMMIT_MS) {
         this.score.update(v => v + 1);
         this.status.set('Correct!');
-        this.noteFilter.set('hue-rotate(90deg)');
+        this.noteFilter.set('drop-shadow(0 0 10px var(--fz-ok)) drop-shadow(0 0 18px var(--fz-ok))');
         this.committedThisPrompt = true;
         this.pendingAdvance = true;
         this.holdStartAt = null;

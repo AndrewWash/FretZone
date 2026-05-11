@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, ElementRef, effect, input, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, effect, inject, input, viewChild } from '@angular/core';
 import type { BaseLetter } from '../core/theory/note';
 import type { ModeName } from '../core/theory/modes';
+import { ThemeService } from '../core/theme/theme.service';
 import { renderScaleEl, type ScaleRenderNote } from './vexflow-render';
 
 @Component({
@@ -21,6 +22,7 @@ export class ScaleStaffComponent {
   isMelodicMinor = input<boolean>(false);
 
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
+  private theme = inject(ThemeService);
 
   constructor() {
     effect(() => {
@@ -33,6 +35,7 @@ export class ScaleStaffComponent {
         showFingerings: this.showFingerings(),
         rowBreaks: this.rowBreaks(),
         isMelodicMinor: this.isMelodicMinor(),
+        theme: this.theme.notationTheme(),
       });
     });
   }
