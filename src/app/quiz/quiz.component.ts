@@ -115,9 +115,11 @@ export class QuizComponent implements OnDestroy {
   }
 
   protected stringLabel(s: number): string {
-    if (s === 6) return 'High E (6)';
-    if (s === 1) return 'Low E (1)';
-    return `String ${s}`;
+    const displayNum = 7 - s;
+    if (s === 1) return `Low E (${displayNum})`;
+    if (s === 6) return `High E (${displayNum})`;
+    const noteName = ['', 'E', 'A', 'D', 'G', 'B', 'E'][s] ?? '';
+    return `${noteName} (${displayNum})`;
   }
 
   protected startQuiz() {
