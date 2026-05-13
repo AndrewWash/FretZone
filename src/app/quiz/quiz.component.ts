@@ -129,12 +129,12 @@ export class QuizComponent implements OnDestroy {
     this.idx.set(0);
     this.score.set(0);
     this.heard.set('--');
-    this.status.set('Play the note');
+    this.status.set('Press Start Mic to begin');
     this.noteFilter.set('');
     this.micStarted.set(false);
     this.phase.set('running');
-    this.timerId = setInterval(() => this.tickTimer(), 1000);
     this.nextPrompt();
+    this.status.set('Press Start Mic to begin');
   }
 
   protected async startMic() {
@@ -146,6 +146,9 @@ export class QuizComponent implements OnDestroy {
       this.unsub?.();
       this.unsub = this.service.subscribe(({ hz }) => this.onHz(hz));
       this.status.set('Play the note');
+      if (this.timerId == null) {
+        this.timerId = setInterval(() => this.tickTimer(), 1000);
+      }
     } catch {
       this.micStarted.set(false);
       this.status.set('Mic failed. Use HTTPS/localhost and allow permission.');
