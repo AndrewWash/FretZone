@@ -48,6 +48,26 @@ function styleNote(note: any, fg: string) {
   } catch {}
 }
 
+// VexFlow draws at a fixed glyph size — sizing the SVG larger only adds blank
+// space. To make a small staff feel larger on screen, render at the intrinsic
+// size, then set a viewBox + scaled width/height so the browser upscales the
+// vector content. CSS `max-width: 100%; height: auto` still clamps to the
+// container, so the staff never overflows its column.
+function scaleSvg(container: HTMLElement, intrinsicWidth: number, intrinsicHeight: number, scale: number) {
+  const svg = container.querySelector('svg') as SVGSVGElement | null;
+  if (!svg) return;
+  // VexFlow's renderer.resize() writes inline width/height styles on the SVG;
+  // those would win over the attributes below and silently cancel the upscale.
+  svg.style.removeProperty('width');
+  svg.style.removeProperty('height');
+  svg.setAttribute('viewBox', `0 0 ${intrinsicWidth} ${intrinsicHeight}`);
+  svg.setAttribute('width', String(Math.round(intrinsicWidth * scale)));
+  svg.setAttribute('height', String(Math.round(intrinsicHeight * scale)));
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+}
+
+const DISPLAY_SCALE = 2.0;
+
 export function renderTrebleNoteEl(container: HTMLElement, midiSounding: number, opts: NotationOptions = {}) {
   const width = opts.width ?? 320;
   const height = opts.height ?? 140;
@@ -82,6 +102,8 @@ export function renderTrebleNoteEl(container: HTMLElement, midiSounding: number,
   voice.addTickables([note]);
   new Flow.Formatter().joinVoices([voice]).format([voice], width - 60);
   voice.draw(context, stave);
+
+  scaleSvg(container, width, height, DISPLAY_SCALE);
 }
 
 export function renderStaffEl(
@@ -91,7 +113,7 @@ export function renderStaffEl(
   mode: 'Dyad' | 'Sequential',
   opts: { theme?: NotationTheme } = {},
 ) {
-  const width = 520; const height = 180;
+  const width = 400; const height = 160;
   const { FG, BG } = themeColors(opts.theme);
   container.innerHTML = '';
   const renderer = new Flow.Renderer(container as HTMLDivElement, Flow.Renderer.Backends.SVG);
@@ -138,6 +160,8 @@ export function renderStaffEl(
     new Flow.Formatter().joinVoices([v2]).format([v2], width - 60);
     v2.draw(context, stave);
   }
+
+  scaleSvg(container, width, height, DISPLAY_SCALE);
 }
 
 export interface MelodyRenderOptions {
