@@ -1252,7 +1252,7 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
   margin: 0;
   font-family: var(--fz-display);
   font-weight: 700;
-  font-size: clamp(2.5rem, 9vw, 5.5rem);
+  font-size: clamp(2rem, 7vw, 4.25rem);
   letter-spacing: -0.04em;
   line-height: 1.05;
   color: var(--fz-t1);
