@@ -23,6 +23,7 @@ interface QuizFormValue {
   notes: boolean[];
   accidentalMode: AccidentalMode;
   sightReading: boolean;
+  hideStringLabels: boolean;
   iterations: number;
   timeLimitSec: number;
   a4: number;
@@ -90,6 +91,7 @@ export class QuizComponent implements OnDestroy {
       notes: this.notesArr,
       accidentalMode: this.fb.nonNullable.control<AccidentalMode>(initial.accidentalMode),
       sightReading: this.fb.nonNullable.control(initial.sightReading),
+      hideStringLabels: this.fb.nonNullable.control(initial.hideStringLabels),
       iterations: this.fb.nonNullable.control(initial.iterations),
       timeLimitSec: this.fb.nonNullable.control(initial.timeLimitSec),
       a4: this.fb.nonNullable.control(initial.a4),
@@ -120,6 +122,12 @@ export class QuizComponent implements OnDestroy {
     if (s === 6) return `High E (${displayNum})`;
     const noteName = ['', 'E', 'A', 'D', 'G', 'B', 'E'][s] ?? '';
     return `${noteName} (${displayNum})`;
+  }
+
+  protected stringThickness(s: number): number {
+    // s=1 (low E) thickest → s=6 (high E) thinnest, roughly proportional
+    // to real guitar string gauges.
+    return [5, 4.25, 3.5, 2.75, 2, 1.25][s - 1] ?? 2;
   }
 
   protected startQuiz() {
@@ -290,6 +298,7 @@ export class QuizComponent implements OnDestroy {
       notes: notes.length ? notes : [...BASE_LETTERS],
       accidentalMode: v.accidentalMode,
       sightReading: v.sightReading,
+      hideStringLabels: v.hideStringLabels,
       iterations: Math.max(1, v.iterations || 10),
       timeLimitSec: Math.min(60, Math.max(1, v.timeLimitSec || 20)),
       a4: v.a4 || 440,

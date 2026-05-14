@@ -603,59 +603,55 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
 .qz-strings {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  border: 1px solid var(--fz-b0);
-  border-radius: var(--fz-radius);
-  overflow: hidden;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
 }
 
 .qz-string-row {
+  --qz-thick: 2px;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.875rem;
-  border-bottom: 1px solid var(--fz-b0);
-  transition: background 200ms ease-out;
+  gap: 0.875rem;
+  padding: 0.25rem 0;
   position: relative;
-}
-.qz-string-row:last-child { border-bottom: 0; }
-
-.qz-string-row::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 3px;
-  background: transparent;
-  transition: background 200ms ease-out;
-}
-
-.qz-string-row.active {
-  background: var(--fz-accent-bg);
-}
-.qz-string-row.active::before {
-  background: var(--fz-accent);
-}
-
-.qz-string-line {
-  flex: 1;
-  height: 1px;
-  background: var(--fz-b1);
-  transition: background 200ms ease-out;
-}
-.qz-string-row.active .qz-string-line {
-  background: oklch(0.62 0.24 285 / 0.50);
-  height: 2px;
-  box-shadow: 0 0 6px 1px var(--fz-accent-glow);
 }
 
 .qz-string-name {
   font-size: 0.75rem;
   color: var(--fz-t3);
   white-space: nowrap;
-  min-width: 5.5rem;
+  min-width: 5rem;
   text-align: right;
-  transition: color 200ms ease-out;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  transition: color 200ms ease-out, font-weight 200ms ease-out;
 }
+
+.qz-string-line {
+  flex: 1;
+  height: var(--qz-thick);
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--fz-t3) 0%,
+    var(--fz-t2) 50%,
+    var(--fz-t3) 100%
+  );
+  transition: height 200ms ease-out, background 200ms ease-out,
+              box-shadow 200ms ease-out;
+}
+
+.qz-string-row.active .qz-string-line {
+  height: calc(var(--qz-thick) * 1.25);
+  background: linear-gradient(
+    to right,
+    var(--fz-accent) 0%,
+    var(--fz-accent-hi) 50%,
+    var(--fz-accent) 100%
+  );
+  box-shadow: 0 0 8px 1px var(--fz-accent-glow);
+}
+
 .qz-string-row.active .qz-string-name {
   color: var(--fz-accent-text);
   font-weight: 600;
