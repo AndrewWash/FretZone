@@ -2,6 +2,8 @@ import type { BaseLetter, AccidentalMode } from '../theory/note';
 
 export type StringId = 1|2|3|4|5|6;
 
+export type LimitMode = 'iterations' | 'time';
+
 export interface QuizConfig {
   fretStart: number;
   fretEnd: number;
@@ -12,6 +14,8 @@ export interface QuizConfig {
   hideStringLabels: boolean;
   iterations: number;
   timeLimitSec: number;
+  limitMode: LimitMode;
+  timeMinutes: number;
   a4: number;
   centsTolerance: number;
 }

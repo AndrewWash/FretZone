@@ -577,7 +577,17 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
 
 .qz-run-actions {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
+}
+
+.qz-timer-pip {
+  font-family: var(--fz-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--fz-t3);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .qz-run-body {

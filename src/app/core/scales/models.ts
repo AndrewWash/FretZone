@@ -33,11 +33,15 @@ export interface ScaleEntry {
   enabled: boolean;
 }
 
+export type LimitMode = 'iterations' | 'time';
+
 export interface ScalesConfig {
   scaleId: string;
   showTab: boolean;
   showFingerings: boolean;
   iterations: number;
+  limitMode: LimitMode;
+  timeMinutes: number;
   a4: number;
   centsTolerance: number;
 }

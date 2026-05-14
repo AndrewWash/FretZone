@@ -16,6 +16,7 @@ import {
 import {
   qualityToMode,
   tonicBaseLetter,
+  type LimitMode,
   type ScaleQuality,
   type ScalesConfig,
 } from '../core/scales/models';
@@ -52,6 +53,10 @@ export class ScalesComponent implements OnDestroy {
   protected heard = signal('--');
   protected status = signal('Waiting...');
   protected micStarted = signal(false);
+  protected endedByTimer = signal(false);
+  protected limitModeSig = signal<LimitMode>('iterations');
+
+  private sessionTimeoutId: any = null;
 
   protected scaleEntry = computed(() => {
     const c = this.cfg();
@@ -146,9 +151,16 @@ export class ScalesComponent implements OnDestroy {
       showTab: this.fb.nonNullable.control(initial.showTab),
       showFingerings: this.fb.nonNullable.control(initial.showFingerings),
       iterations: this.fb.nonNullable.control(initial.iterations),
+      limitMode: this.fb.nonNullable.control<LimitMode>(initial.limitMode),
+      timeMinutes: this.fb.nonNullable.control(initial.timeMinutes),
       a4: this.fb.nonNullable.control(initial.a4),
       centsTolerance: this.fb.nonNullable.control(initial.centsTolerance),
     });
+
+    this.limitModeSig.set(this.form.controls.limitMode.value);
+    this.form.controls.limitMode.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(v => this.limitModeSig.set(v));
 
     this.form.valueChanges
       .pipe(takeUntilDestroyed())
@@ -178,8 +190,16 @@ export class ScalesComponent implements OnDestroy {
     this.iterationIdx.set(1);
     this.heard.set('--');
     this.micStarted.set(false);
+    this.endedByTimer.set(false);
     this.status.set('Press Start Mic, then play the first note.');
     this.phase.set('running');
+  }
+
+  private finishByTimer() {
+    if (this.phase() !== 'running') return;
+    this.endedByTimer.set(true);
+    this.cleanupRun();
+    this.phase.set('done');
   }
 
   protected async startMic() {
@@ -190,6 +210,13 @@ export class ScalesComponent implements OnDestroy {
       this.micStarted.set(true);
       this.spinUpDetection();
       this.status.set('Listening... Play the first note.');
+      const c = this.cfg();
+      if (c?.limitMode === 'time' && this.sessionTimeoutId == null) {
+        this.sessionTimeoutId = setTimeout(
+          () => this.finishByTimer(),
+          c.timeMinutes * 60 * 1000,
+        );
+      }
     } catch {
       this.micStarted.set(false);
       this.status.set('Mic failed. Use HTTPS/localhost and allow permission.');
@@ -226,7 +253,7 @@ export class ScalesComponent implements OnDestroy {
         onComplete: () => {
           const c2 = this.cfg();
           if (!c2) return;
-          if (this.iterationIdx() >= c2.iterations) {
+          if (c2.limitMode === 'iterations' && this.iterationIdx() >= c2.iterations) {
             this.status.set('Done!');
             this.cleanupRun();
             this.phase.set('done');
@@ -252,6 +279,10 @@ export class ScalesComponent implements OnDestroy {
 
   private cleanupRun() {
     this.tearDownDetection();
+    if (this.sessionTimeoutId != null) {
+      clearTimeout(this.sessionTimeoutId);
+      this.sessionTimeoutId = null;
+    }
     this.service.stop();
     this.micStarted.set(false);
   }
@@ -263,6 +294,8 @@ export class ScalesComponent implements OnDestroy {
       showTab: !!v.showTab,
       showFingerings: !!v.showFingerings,
       iterations: Math.max(1, v.iterations || 1),
+      limitMode: v.limitMode === 'time' ? 'time' : 'iterations',
+      timeMinutes: Math.min(60, Math.max(1, v.timeMinutes || 3)),
       a4: v.a4 || 440,
       centsTolerance: Math.min(50, Math.max(5, v.centsTolerance || 25)),
     };

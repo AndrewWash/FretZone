@@ -10,6 +10,7 @@ import {
   DisplayMode,
   IntervalConfig,
   IntervalType,
+  LimitMode,
   buildCycle,
   defaultIntervalConfig,
   overrideSpellingForTritone,
@@ -32,6 +33,8 @@ interface IntervalFormValue {
   direction: DirectionMode;
   display: DisplayMode;
   iterations: number;
+  limitMode: LimitMode;
+  timeMinutes: number;
   accidentalMode: AccidentalMode;
   a4: number;
   centsTolerance: number;
@@ -54,7 +57,7 @@ export class IntervalsComponent implements OnDestroy {
   protected stringsArr: FormArray<FormControl<boolean>>;
   protected intervalsArr: FormArray<FormControl<boolean>>;
 
-  protected phase = signal<'setup' | 'running'>('setup');
+  protected phase = signal<'setup' | 'running' | 'done'>('setup');
   protected cfg = signal<IntervalConfig | null>(null);
   protected current = signal<Cycle | null>(null);
   protected step = signal<0 | 1>(0);
@@ -67,6 +70,10 @@ export class IntervalsComponent implements OnDestroy {
   protected heard = signal('--');
   protected status = signal('Waiting...');
   protected micStarted = signal(false);
+  protected endedByTimer = signal(false);
+  protected limitModeSig = signal<LimitMode>('iterations');
+
+  private sessionTimeoutId: any = null;
 
   protected progressLabel = () => Math.min(this.cycleIdx() + 1, this.cfg()?.iterations ?? 0);
 
@@ -100,10 +107,17 @@ export class IntervalsComponent implements OnDestroy {
       direction: this.fb.nonNullable.control<DirectionMode>(initial.direction),
       display: this.fb.nonNullable.control<DisplayMode>(initial.display),
       iterations: this.fb.nonNullable.control(initial.iterations),
+      limitMode: this.fb.nonNullable.control<LimitMode>(initial.limitMode),
+      timeMinutes: this.fb.nonNullable.control(initial.timeMinutes),
       accidentalMode: this.fb.nonNullable.control<AccidentalMode>(initial.accidentalMode),
       a4: this.fb.nonNullable.control(initial.a4),
       centsTolerance: this.fb.nonNullable.control(initial.centsTolerance),
     });
+
+    this.limitModeSig.set(this.form.controls.limitMode.value);
+    this.form.controls.limitMode.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(v => this.limitModeSig.set(v));
 
     this.form.valueChanges
       .pipe(takeUntilDestroyed())
@@ -123,6 +137,7 @@ export class IntervalsComponent implements OnDestroy {
     this.heard.set('--');
     this.status.set('Play bottom note...');
     this.micStarted.set(false);
+    this.endedByTimer.set(false);
     try {
       this.current.set(buildCycle(c));
     } catch {
@@ -146,6 +161,13 @@ export class IntervalsComponent implements OnDestroy {
         this.micStarted.set(true);
         this.status.set('Listening...');
       }
+      const c = this.cfg();
+      if (c?.limitMode === 'time' && this.sessionTimeoutId == null) {
+        this.sessionTimeoutId = setTimeout(
+          () => this.finishByTimer(),
+          c.timeMinutes * 60 * 1000,
+        );
+      }
     } catch {
       this.micStarted.set(false);
       this.status.set('Mic start failed. Click Start Mic and allow access.');
@@ -155,6 +177,18 @@ export class IntervalsComponent implements OnDestroy {
   protected stopRun() {
     this.cleanupRun();
     this.phase.set('setup');
+  }
+
+  protected reset() {
+    this.cleanupRun();
+    this.phase.set('setup');
+  }
+
+  private finishByTimer() {
+    if (this.phase() !== 'running') return;
+    this.endedByTimer.set(true);
+    this.cleanupRun();
+    this.phase.set('done');
   }
 
   private renderStep() {
@@ -234,7 +268,10 @@ export class IntervalsComponent implements OnDestroy {
           } else {
             this.step.set(0);
             this.cycleIdx.update(v => v + 1);
-            if (this.cycleIdx() >= (this.cfg()?.iterations ?? 0)) {
+            const cfg = this.cfg();
+            const iterationsExhausted = cfg?.limitMode === 'iterations'
+              && this.cycleIdx() >= (cfg?.iterations ?? 0);
+            if (iterationsExhausted) {
               this.status.set('Done!');
               this.cleanupRun();
               this.phase.set('setup');
@@ -262,6 +299,10 @@ export class IntervalsComponent implements OnDestroy {
       try { this.activeDet.stop(); } catch {}
       this.activeDet = null;
     }
+    if (this.sessionTimeoutId != null) {
+      clearTimeout(this.sessionTimeoutId);
+      this.sessionTimeoutId = null;
+    }
     this.service.stop();
     this.micStarted.set(false);
   }
@@ -278,6 +319,8 @@ export class IntervalsComponent implements OnDestroy {
       direction: v.direction,
       display: v.display,
       iterations: Math.max(1, v.iterations || 10),
+      limitMode: v.limitMode === 'time' ? 'time' : 'iterations',
+      timeMinutes: Math.min(60, Math.max(1, v.timeMinutes || 3)),
       accidentalMode: v.accidentalMode,
       a4: v.a4 || 440,
       centsTolerance: Math.min(50, Math.max(5, v.centsTolerance || 25)),
