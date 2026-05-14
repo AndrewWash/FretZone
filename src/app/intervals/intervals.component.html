@@ -15,9 +15,21 @@
             <label>End <input type="number" min="1" max="20" formControlName="fretEnd" class="qz-num" /></label>
           </div>
         </div>
-        <div>
-          <span id="iv-lbl-iter" class="qz-field-lbl">Iterations</span>
-          <input id="iv-iter" aria-labelledby="iv-lbl-iter" type="number" min="1" max="200" formControlName="iterations" class="qz-num" />
+        <div role="group" aria-labelledby="iv-lbl-limit">
+          <span id="iv-lbl-limit" class="qz-field-lbl">Limit by</span>
+          <label class="qz-opt-row">
+            <input type="radio" formControlName="limitMode" value="iterations" />
+            Iterations
+          </label>
+          <label class="qz-opt-row">
+            <input type="radio" formControlName="limitMode" value="time" />
+            Time (min)
+          </label>
+          @if (limitModeSig() === 'iterations') {
+            <input type="number" min="1" max="200" formControlName="iterations" class="qz-num" aria-label="Iterations" />
+          } @else {
+            <input type="number" min="1" max="60" formControlName="timeMinutes" class="qz-num" aria-label="Minutes" />
+          }
         </div>
       </div>
 
@@ -110,9 +122,11 @@
     <div class="qz-run-head">
       <h2 class="qz-run-title">
         Interval Memorization
-        <span class="qz-progress-pip">{{ progressLabel() }} / {{ c.iterations }}</span>
       </h2>
       <div class="qz-run-actions">
+        @if (micStarted() && c.limitMode === 'time') {
+          <span class="qz-timer-pip" role="status" aria-live="polite">Timer started</span>
+        }
         <button class="secondary" (click)="stopRun()">Stop</button>
         <button (click)="startMic()" [disabled]="micStarted()">Start Mic</button>
       </div>
@@ -141,6 +155,15 @@
           <div class="qz-stat-value" aria-live="polite">{{ status() }}</div>
         </div>
       </div>
+    </div>
+  </div>
+}
+
+@if (phase() === 'done') {
+  <div class="qz-done" role="main" aria-label="Session complete">
+    <p class="qz-done-sub">Times up!</p>
+    <div class="qz-done-restart">
+      <button (click)="reset()">Try again</button>
     </div>
   </div>
 }

@@ -41,9 +41,21 @@
             Dark mode notation
           </label>
         </div>
-        <div>
-          <span class="qz-field-lbl">Iterations</span>
-          <input type="number" min="1" max="200" formControlName="iterations" class="qz-num" />
+        <div role="group" aria-labelledby="sc-lbl-limit">
+          <span id="sc-lbl-limit" class="qz-field-lbl">Limit by</span>
+          <label class="qz-opt-row">
+            <input type="radio" formControlName="limitMode" value="iterations" />
+            Iterations
+          </label>
+          <label class="qz-opt-row">
+            <input type="radio" formControlName="limitMode" value="time" />
+            Time (min)
+          </label>
+          @if (limitModeSig() === 'iterations') {
+            <input type="number" min="1" max="200" formControlName="iterations" class="qz-num" aria-label="Iterations" />
+          } @else {
+            <input type="number" min="1" max="60" formControlName="timeMinutes" class="qz-num" aria-label="Minutes" />
+          }
         </div>
       </div>
 
@@ -67,11 +79,12 @@
     <div class="qz-run-head">
       <h2 class="qz-run-title">
         Scales
-        <span class="qz-progress-pip">{{ iterationIdx() }} / {{ c.iterations }}</span>
-        <span class="qz-progress-pip">{{ playedCount() }} / {{ run()?.midis?.length ?? 0 }}</span>
         <span class="qz-progress-pip">{{ scaleTitle() }}</span>
       </h2>
       <div class="qz-run-actions">
+        @if (micStarted() && c.limitMode === 'time') {
+          <span class="qz-timer-pip" role="status" aria-live="polite">Timer started</span>
+        }
         <button class="secondary" (click)="stopAndReset()">Stop</button>
         <button (click)="startMic()" [disabled]="micStarted()">Start Mic</button>
       </div>
@@ -127,9 +140,13 @@
 
 @if (phase() === 'done') {
   <div class="qz-done" role="main" aria-label="Scale complete">
-    <p class="qz-done-eyebrow">Scale complete</p>
-    <p class="qz-done-score">{{ scaleTitle() }}</p>
-    <p class="qz-done-sub">Clean run, top to bottom.</p>
+    @if (endedByTimer()) {
+      <p class="qz-done-sub">Times up!</p>
+    } @else {
+      <p class="qz-done-eyebrow">Scale complete</p>
+      <p class="qz-done-score">{{ scaleTitle() }}</p>
+      <p class="qz-done-sub">Clean run, top to bottom.</p>
+    }
     <div class="qz-done-restart">
       <button (click)="reset()">Try again</button>
     </div>

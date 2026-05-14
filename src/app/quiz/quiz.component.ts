@@ -5,7 +5,7 @@ import { startWith } from 'rxjs/operators';
 import { PitchDetectService, Unsubscribe } from '../core/audio/pitch-detect.service';
 import { AccidentalMode, BASE_LETTERS, BaseLetter, enharmonicDisplay } from '../core/theory/note';
 import { allCandidates, defaultConfig, freqMatchesPrompt, randomPrompt } from '../core/quiz/engine';
-import type { Prompt, QuizConfig, StringId } from '../core/quiz/models';
+import type { LimitMode, Prompt, QuizConfig, StringId } from '../core/quiz/models';
 import { ThemeService } from '../core/theme/theme.service';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
 import { TrebleNoteComponent } from '../notation/treble-note.component';
@@ -26,6 +26,8 @@ interface QuizFormValue {
   hideStringLabels: boolean;
   iterations: number;
   timeLimitSec: number;
+  limitMode: LimitMode;
+  timeMinutes: number;
   a4: number;
   centsTolerance: number;
 }
@@ -58,12 +60,15 @@ export class QuizComponent implements OnDestroy {
   protected status = signal('Waiting...');
   protected noteFilter = signal('');
   protected micStarted = signal(false);
+  protected endedByTimer = signal(false);
+  protected limitModeSig = signal<LimitMode>('iterations');
 
   protected poolCount;
 
   private unsub: Unsubscribe | null = null;
   private timerId: any = null;
   private advanceTimeoutId: any = null;
+  private sessionTimeoutId: any = null;
   private holdStartAt: number | null = null;
   private holdRefHz: number | null = null;
   private promptChangedAt = 0;
@@ -94,9 +99,16 @@ export class QuizComponent implements OnDestroy {
       hideStringLabels: this.fb.nonNullable.control(initial.hideStringLabels),
       iterations: this.fb.nonNullable.control(initial.iterations),
       timeLimitSec: this.fb.nonNullable.control(initial.timeLimitSec),
+      limitMode: this.fb.nonNullable.control<LimitMode>(initial.limitMode),
+      timeMinutes: this.fb.nonNullable.control(initial.timeMinutes),
       a4: this.fb.nonNullable.control(initial.a4),
       centsTolerance: this.fb.nonNullable.control(initial.centsTolerance),
     });
+
+    this.limitModeSig.set(this.form.controls.limitMode.value);
+    this.form.controls.limitMode.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(v => this.limitModeSig.set(v));
 
     this.form.valueChanges
       .pipe(takeUntilDestroyed())
@@ -140,6 +152,7 @@ export class QuizComponent implements OnDestroy {
     this.status.set('Press Start Mic to begin');
     this.noteFilter.set('');
     this.micStarted.set(false);
+    this.endedByTimer.set(false);
     this.phase.set('running');
     this.nextPrompt();
     this.status.set('Press Start Mic to begin');
@@ -156,6 +169,13 @@ export class QuizComponent implements OnDestroy {
       this.status.set('Play the note');
       if (this.timerId == null) {
         this.timerId = setInterval(() => this.tickTimer(), 1000);
+      }
+      const c = this.cfg();
+      if (c?.limitMode === 'time' && this.sessionTimeoutId == null) {
+        this.sessionTimeoutId = setTimeout(
+          () => this.finishByTimer(),
+          c.timeMinutes * 60 * 1000,
+        );
       }
     } catch {
       this.micStarted.set(false);
@@ -176,7 +196,7 @@ export class QuizComponent implements OnDestroy {
   private nextPrompt() {
     const c = this.cfg();
     if (!c) return;
-    if (this.idx() >= c.iterations) {
+    if (c.limitMode === 'iterations' && this.idx() >= c.iterations) {
       this.finish();
       return;
     }
@@ -207,6 +227,13 @@ export class QuizComponent implements OnDestroy {
   }
 
   private finish() {
+    this.cleanupRun();
+    this.phase.set('done');
+  }
+
+  private finishByTimer() {
+    if (this.phase() !== 'running') return;
+    this.endedByTimer.set(true);
     this.cleanupRun();
     this.phase.set('done');
   }
@@ -282,6 +309,10 @@ export class QuizComponent implements OnDestroy {
       clearTimeout(this.advanceTimeoutId);
       this.advanceTimeoutId = null;
     }
+    if (this.sessionTimeoutId != null) {
+      clearTimeout(this.sessionTimeoutId);
+      this.sessionTimeoutId = null;
+    }
     this.pendingAdvance = false;
     this.committedThisPrompt = false;
     this.micStarted.set(false);
@@ -301,6 +332,8 @@ export class QuizComponent implements OnDestroy {
       hideStringLabels: v.hideStringLabels,
       iterations: Math.max(1, v.iterations || 10),
       timeLimitSec: Math.min(60, Math.max(1, v.timeLimitSec || 20)),
+      limitMode: v.limitMode === 'time' ? 'time' : 'iterations',
+      timeMinutes: Math.min(60, Math.max(1, v.timeMinutes || 3)),
       a4: v.a4 || 440,
       centsTolerance: Math.min(50, Math.max(5, v.centsTolerance || 25)),
     };

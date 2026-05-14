@@ -13,6 +13,8 @@ export function defaultConfig(): QuizConfig {
     hideStringLabels: true,
     iterations: 25,
     timeLimitSec: 20,
+    limitMode: 'iterations',
+    timeMinutes: 3,
     a4: 440,
     centsTolerance: 25,
   };

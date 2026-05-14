@@ -4,6 +4,7 @@ import { randOf } from '../utils/random';
 export type IntervalType = 'm2'|'M2'|'m3'|'M3'|'P4'|'Aug4'|'Dim5'|'P5'|'m6'|'M6'|'m7'|'M7'|'P8';
 export type DirectionMode = 'UpDown'|'DownUp';
 export type DisplayMode = 'Dyad'|'Sequential'|'Both';
+export type LimitMode = 'iterations' | 'time';
 
 export interface IntervalConfig {
   fretStart: number;
@@ -13,6 +14,8 @@ export interface IntervalConfig {
   direction: DirectionMode;
   display: DisplayMode;
   iterations: number;
+  limitMode: LimitMode;
+  timeMinutes: number;
   a4: number;
   centsTolerance: number;
   accidentalMode: AccidentalMode;
@@ -37,6 +40,8 @@ export function defaultIntervalConfig(): IntervalConfig {
     direction: 'UpDown',
     display: 'Dyad',
     iterations: 10,
+    limitMode: 'iterations',
+    timeMinutes: 3,
     a4: 440,
     centsTolerance: 25,
     accidentalMode: 'Naturals',

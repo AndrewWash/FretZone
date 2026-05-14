@@ -56,6 +56,8 @@ export function defaultScalesConfig(): ScalesConfig {
     showTab: false,
     showFingerings: false,
     iterations: 1,
+    limitMode: 'iterations',
+    timeMinutes: 3,
     a4: 440,
     centsTolerance: 25,
   };
