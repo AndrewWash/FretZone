@@ -9,6 +9,7 @@ export interface QuizConfig {
   notes: BaseLetter[];
   accidentalMode: AccidentalMode;
   sightReading: boolean;
+  hideStringLabels: boolean;
   iterations: number;
   timeLimitSec: number;
   a4: number;
