@@ -4,6 +4,8 @@ import { FormArray, FormBuilder, FormControl, ReactiveFormsModule } from '@angul
 import { startWith } from 'rxjs/operators';
 import { PitchDetectService } from '../core/audio/pitch-detect.service';
 import { startMelodyDetection } from '../core/audio/melody-detection';
+import { MetronomeBarComponent } from '../core/audio/metronome-bar.component';
+import { MetronomeService } from '../core/audio/metronome.service';
 import { AccidentalMode, BASE_LETTERS, BaseLetter, enharmonicDisplay } from '../core/theory/note';
 import { MODE_LABELS, MODE_NAMES, ModeName, preferFlatsFor } from '../core/theory/modes';
 import { defaultConfig, generatePhrase, normalizeBarCount, playablePool } from '../core/melody/engine';
@@ -30,13 +32,14 @@ interface MelodyFormValue {
 
 @Component({
   selector: 'app-melody',
-  imports: [ReactiveFormsModule, MelodyStaffComponent],
+  imports: [ReactiveFormsModule, MelodyStaffComponent, MetronomeBarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './melody.component.html',
 })
 export class MelodyComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private service = inject(PitchDetectService);
+  private metronome = inject(MetronomeService);
 
   protected baseLetters: BaseLetter[] = [...BASE_LETTERS];
   protected modeNames: ModeName[] = [...MODE_NAMES];
@@ -138,6 +141,7 @@ export class MelodyComponent implements OnDestroy {
     }
     this.idx.set(1);
     this.status.set('Press Start Mic, then play the first note.');
+    this.metronome.resetForNewSession();
     this.phase.set('running');
   }
 
@@ -226,6 +230,7 @@ export class MelodyComponent implements OnDestroy {
     this.tearDownDetection();
     this.service.stop();
     this.micStarted.set(false);
+    this.metronome.stop();
   }
 
   private formToConfig(): MelodyConfig {

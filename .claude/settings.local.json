@@ -8,7 +8,8 @@
       "Bash(Sort-Object)",
       "Bash(node *)",
       "Bash(Get-ChildItem *)",
-      "Bash(dir C:\\\\code\\\\FretZone *)"
+      "Bash(dir C:\\\\code\\\\FretZone *)",
+      "Bash(find *)"
     ]
   }
 }

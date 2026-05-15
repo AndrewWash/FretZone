@@ -126,6 +126,8 @@
        role="region"
        aria-label="TimeBase running"
        [class.tb-run-paused]="paused()">
+    <app-metronome-bar class="tb-metronome-top" />
+
     @for (key of [cycleIdx() + '-' + fieldIdx()]; track key) {
       @if (currentField(); as f) {
         <div class="tb-focus">

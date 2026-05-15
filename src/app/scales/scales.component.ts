@@ -3,6 +3,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { PitchDetectService } from '../core/audio/pitch-detect.service';
 import { startMelodyDetection } from '../core/audio/melody-detection';
+import { MetronomeBarComponent } from '../core/audio/metronome-bar.component';
+import { MetronomeService } from '../core/audio/metronome.service';
 import { enharmonicDisplay } from '../core/theory/note';
 import type { ModeName } from '../core/theory/modes';
 import type { BaseLetter } from '../core/theory/note';
@@ -32,13 +34,14 @@ const STORAGE_KEY = 'fretzone.scales.cfg.v1';
 
 @Component({
   selector: 'app-scales',
-  imports: [ReactiveFormsModule, ScaleStaffComponent, FretboardDiagramComponent],
+  imports: [ReactiveFormsModule, ScaleStaffComponent, FretboardDiagramComponent, MetronomeBarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './scales.component.html',
 })
 export class ScalesComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private service = inject(PitchDetectService);
+  private metronome = inject(MetronomeService);
   protected theme = inject(ThemeService);
 
   protected patternGroups = scalesGroupedByPattern();
@@ -192,6 +195,7 @@ export class ScalesComponent implements OnDestroy {
     this.micStarted.set(false);
     this.endedByTimer.set(false);
     this.status.set('Press Start Mic, then play the first note.');
+    this.metronome.resetForNewSession();
     this.phase.set('running');
   }
 
@@ -285,6 +289,7 @@ export class ScalesComponent implements OnDestroy {
     }
     this.service.stop();
     this.micStarted.set(false);
+    this.metronome.stop();
   }
 
   private formToConfig(): ScalesConfig {
