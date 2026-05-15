@@ -1,0 +1,169 @@
+@if (phase() === 'setup') {
+  <form [formGroup]="form" (ngSubmit)="start()" autocomplete="off" class="tb-setup">
+    <div class="tb-setup-head">
+      <div class="tb-setup-titles">
+        <h2 class="tb-setup-title">TimeBase</h2>
+        <p class="tb-setup-sub">Time-based practice circuits</p>
+      </div>
+      <span class="tb-setup-badge">Setup</span>
+    </div>
+
+    <div class="tb-preset-row">
+      <button type="button" class="secondary tb-preset-btn" (click)="loadFiveMinuteDrill()">
+        Load Five Minute Drill
+      </button>
+      <span class="tb-preset-hint">Prefills the fields below — your cycles and minutes are kept.</span>
+    </div>
+
+    <div class="tb-config-grid">
+      <div class="tb-config-col">
+        <label class="tb-field-block">
+          <span class="tb-field-lbl">Cycles</span>
+          <input type="number" min="1" max="20" step="1" inputmode="numeric"
+                 formControlName="cycles" class="tb-num" aria-label="Cycles" />
+        </label>
+      </div>
+      <div class="tb-config-col">
+        <label class="tb-field-block">
+          <span class="tb-field-lbl">Minutes per field</span>
+          <input type="number" min="1" max="60" step="1" inputmode="numeric"
+                 formControlName="minutesPerField" class="tb-num" aria-label="Minutes per field" />
+        </label>
+      </div>
+    </div>
+
+    <fieldset class="tb-section">
+      <legend class="qz-sr">Fields</legend>
+      <div class="tb-section-label" aria-hidden="true">
+        <span class="tb-section-num">01</span>
+        <span class="tb-section-title">Fields</span>
+      </div>
+
+      <div class="tb-rows" formArrayName="fields">
+        @for (g of fieldsArr.controls; track g) {
+          <div class="tb-row" [formGroupName]="$index">
+            <span class="tb-row-num" aria-hidden="true">{{ $index + 1 }}</span>
+            <div class="tb-row-inputs">
+              <input type="text"
+                     formControlName="main"
+                     class="tb-input tb-input-main"
+                     placeholder="Exercise name"
+                     (paste)="onPaste($event, g, 'mainImage')"
+                     [attr.aria-label]="'Field ' + ($index + 1) + ' main'" />
+              <input type="text"
+                     formControlName="sub"
+                     class="tb-input tb-input-sub"
+                     placeholder="Detail (optional)"
+                     (paste)="onPaste($event, g, 'subImage')"
+                     [attr.aria-label]="'Field ' + ($index + 1) + ' detail'" />
+            </div>
+            <button type="button"
+                    class="secondary tb-row-remove"
+                    (click)="removeField($index)"
+                    [disabled]="fieldsArr.length <= 1"
+                    [attr.aria-label]="'Remove field ' + ($index + 1)">
+              ✕
+            </button>
+            @if (g.controls.mainImage.value || g.controls.subImage.value) {
+              <div class="tb-row-images">
+                @if (g.controls.mainImage.value; as src) {
+                  <figure class="tb-thumb">
+                    <img [src]="src" alt="" class="tb-thumb-img" />
+                    <figcaption class="tb-thumb-tag" aria-hidden="true">Main</figcaption>
+                    <button type="button"
+                            class="tb-thumb-remove"
+                            (click)="clearImage(g, 'mainImage')"
+                            [attr.aria-label]="'Remove main image from field ' + ($index + 1)">
+                      ✕
+                    </button>
+                  </figure>
+                }
+                @if (g.controls.subImage.value; as src) {
+                  <figure class="tb-thumb">
+                    <img [src]="src" alt="" class="tb-thumb-img" />
+                    <figcaption class="tb-thumb-tag" aria-hidden="true">Detail</figcaption>
+                    <button type="button"
+                            class="tb-thumb-remove"
+                            (click)="clearImage(g, 'subImage')"
+                            [attr.aria-label]="'Remove detail image from field ' + ($index + 1)">
+                      ✕
+                    </button>
+                  </figure>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="tb-rows-actions">
+        <button type="button" class="secondary tb-add" (click)="addField()">
+          + Add field
+        </button>
+        <span class="tb-paste-hint">
+          Tip: focus a field and paste an image (<kbd class="tb-kbd">Ctrl</kbd>+<kbd class="tb-kbd">V</kbd>) to use it as a visual cue.
+        </span>
+      </div>
+
+      @if (pasteError(); as err) {
+        <p class="tb-paste-error" role="status" aria-live="polite">{{ err }}</p>
+      }
+    </fieldset>
+
+    <div class="tb-action">
+      <button type="submit" class="tb-start" [disabled]="!hasAnyMain()">
+        Start <span class="tb-start-arrow" aria-hidden="true">→</span>
+      </button>
+      <span class="tb-hint">Press <kbd class="tb-kbd">Space</kbd> during the run to pause and resume.</span>
+    </div>
+  </form>
+}
+
+@if (phase() === 'running') {
+  <div #runRoot
+       class="tb-run"
+       tabindex="-1"
+       role="region"
+       aria-label="TimeBase running"
+       [class.tb-run-paused]="paused()">
+    @for (key of [cycleIdx() + '-' + fieldIdx()]; track key) {
+      @if (currentField(); as f) {
+        <div class="tb-focus">
+          @if (f.main) {
+            <h2 class="tb-main" role="status" aria-live="polite" aria-atomic="true">
+              {{ f.main }}
+            </h2>
+          }
+          @if (f.mainImage) {
+            <img [src]="f.mainImage" [alt]="f.main || 'Main image'" class="tb-run-img tb-run-img-main" />
+          }
+          @if (f.sub) {
+            <p class="tb-sub">{{ f.sub }}</p>
+          }
+          @if (f.subImage) {
+            <img [src]="f.subImage" [alt]="f.sub || 'Detail image'" class="tb-run-img tb-run-img-sub" />
+          }
+        </div>
+      }
+    }
+
+    <div class="tb-bottom">
+      @if (showCountdown() && !paused()) {
+        <div class="tb-countdown" aria-hidden="true">{{ remainingSec() }}</div>
+      }
+      @if (paused()) {
+        <div class="tb-paused-pill" role="status" aria-live="polite">Paused</div>
+      }
+    </div>
+  </div>
+}
+
+@if (phase() === 'done') {
+  <div class="tb-done" role="main" aria-label="TimeBase complete">
+    <p class="tb-done-eyebrow">Session complete</p>
+    <p class="tb-done-headline">Done.</p>
+    <div class="tb-done-actions">
+      <button type="button" (click)="backToSetup()">Back to setup</button>
+    </div>
+  </div>
+}

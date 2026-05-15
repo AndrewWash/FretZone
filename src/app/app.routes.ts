@@ -22,4 +22,8 @@ export const routes: Routes = [
     path: 'scales',
     loadComponent: () => import('./scales/scales.component').then(m => m.ScalesComponent),
   },
+  {
+    path: 'timebase',
+    loadComponent: () => import('./timebase/timebase.component').then(m => m.TimebaseComponent),
+  },
 ];
