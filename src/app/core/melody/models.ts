@@ -7,6 +7,8 @@ export type Difficulty = 'Easy' | 'Intermediate';
 export type PhraseBarCount = 2 | 4 | 8;
 export const PHRASE_BAR_OPTIONS: readonly PhraseBarCount[] = [2, 4, 8];
 
+export type LimitMode = 'iterations' | 'time';
+
 export interface MelodyConfig {
   difficulty: Difficulty;
   tonic: BaseLetter;
@@ -16,6 +18,8 @@ export interface MelodyConfig {
   strings: StringId[];
   iterations: number;
   bars: PhraseBarCount;
+  limitMode: LimitMode;
+  timeMinutes: number;
   a4: number;
   centsTolerance: number;
 }

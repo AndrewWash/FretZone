@@ -9,7 +9,7 @@ import { MetronomeService } from '../core/audio/metronome.service';
 import { AccidentalMode, BASE_LETTERS, BaseLetter, enharmonicDisplay } from '../core/theory/note';
 import { MODE_LABELS, MODE_NAMES, ModeName, preferFlatsFor } from '../core/theory/modes';
 import { defaultConfig, generatePhrase, normalizeBarCount, playablePool } from '../core/melody/engine';
-import type { Difficulty, MelodyConfig, MelodyPhrase, PhraseBarCount } from '../core/melody/models';
+import type { Difficulty, LimitMode, MelodyConfig, MelodyPhrase, PhraseBarCount } from '../core/melody/models';
 import { PHRASE_BAR_OPTIONS } from '../core/melody/models';
 import type { StringId } from '../core/quiz/models';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
@@ -26,6 +26,8 @@ interface MelodyFormValue {
   strings: boolean[];
   iterations: number;
   bars: PhraseBarCount;
+  limitMode: LimitMode;
+  timeMinutes: number;
   a4: number;
   centsTolerance: number;
 }
@@ -59,6 +61,8 @@ export class MelodyComponent implements OnDestroy {
   protected heard = signal('--');
   protected status = signal('Waiting...');
   protected micStarted = signal(false);
+  protected endedByTimer = signal(false);
+  protected limitModeSig = signal<LimitMode>('iterations');
 
   // Wider staff when bars-per-row goes up so each bar still has room.
   // 8-bar phrases wrap at 4 bars/row, so they share the 4-bar width.
@@ -77,6 +81,7 @@ export class MelodyComponent implements OnDestroy {
   });
 
   private det: { start: () => Promise<void>; stop: () => void } | null = null;
+  private sessionTimeoutId: any = null;
 
   constructor() {
     const initial = { ...defaultConfig(), ...loadFromStorage<Partial<MelodyConfig>>(STORAGE_KEY, {}) };
@@ -96,9 +101,16 @@ export class MelodyComponent implements OnDestroy {
       strings: this.stringsArr,
       iterations: this.fb.nonNullable.control(initial.iterations),
       bars: this.fb.nonNullable.control<PhraseBarCount>(normalizeBarCount(initial.bars)),
+      limitMode: this.fb.nonNullable.control<LimitMode>(initial.limitMode),
+      timeMinutes: this.fb.nonNullable.control(initial.timeMinutes),
       a4: this.fb.nonNullable.control(initial.a4),
       centsTolerance: this.fb.nonNullable.control(initial.centsTolerance),
     });
+
+    this.limitModeSig.set(this.form.controls.limitMode.value);
+    this.form.controls.limitMode.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(v => this.limitModeSig.set(v));
 
     this.form.valueChanges
       .pipe(takeUntilDestroyed())
@@ -133,6 +145,7 @@ export class MelodyComponent implements OnDestroy {
     this.heard.set('--');
     this.playedCount.set(0);
     this.micStarted.set(false);
+    this.endedByTimer.set(false);
     try {
       this.phrase.set(generatePhrase(c));
     } catch (e: any) {
@@ -153,6 +166,13 @@ export class MelodyComponent implements OnDestroy {
       this.micStarted.set(true);
       this.spinUpDetection();
       this.status.set('Listening... Play the first note.');
+      const c = this.cfg();
+      if (c?.limitMode === 'time' && this.sessionTimeoutId == null) {
+        this.sessionTimeoutId = setTimeout(
+          () => this.finishByTimer(),
+          c.timeMinutes * 60 * 1000,
+        );
+      }
     } catch {
       this.micStarted.set(false);
       this.status.set('Mic failed. Use HTTPS/localhost and allow permission.');
@@ -190,7 +210,7 @@ export class MelodyComponent implements OnDestroy {
           this.score.update(v => v + 1);
           const c2 = this.cfg();
           if (!c2) return;
-          if (this.idx() >= c2.iterations) {
+          if (c2.limitMode === 'iterations' && this.idx() >= c2.iterations) {
             this.status.set('Done!');
             this.cleanupRun();
             this.phase.set('done');
@@ -226,9 +246,20 @@ export class MelodyComponent implements OnDestroy {
     }
   }
 
+  private finishByTimer() {
+    if (this.phase() !== 'running') return;
+    this.endedByTimer.set(true);
+    this.cleanupRun();
+    this.phase.set('done');
+  }
+
   private cleanupRun() {
     this.tearDownDetection();
     this.service.stop();
+    if (this.sessionTimeoutId != null) {
+      clearTimeout(this.sessionTimeoutId);
+      this.sessionTimeoutId = null;
+    }
     this.micStarted.set(false);
     this.metronome.stop();
   }
@@ -245,6 +276,8 @@ export class MelodyComponent implements OnDestroy {
       strings: stringIds.length ? stringIds : [1, 2, 3, 4, 5, 6],
       iterations: Math.max(1, v.iterations || 5),
       bars: normalizeBarCount(v.bars),
+      limitMode: v.limitMode === 'time' ? 'time' : 'iterations',
+      timeMinutes: Math.min(60, Math.max(1, v.timeMinutes || 3)),
       a4: v.a4 || 440,
       centsTolerance: Math.min(50, Math.max(5, v.centsTolerance || 25)),
     };
