@@ -62,9 +62,21 @@
             }
           </div>
         </div>
-        <div>
-          <span class="qz-field-lbl">Iterations</span>
-          <input type="number" min="1" max="200" formControlName="iterations" class="qz-num" />
+        <div role="group" aria-labelledby="ml-lbl-limit">
+          <span id="ml-lbl-limit" class="qz-field-lbl">Limit by</span>
+          <label class="qz-opt-row">
+            <input type="radio" formControlName="limitMode" value="iterations" />
+            Iterations
+          </label>
+          <label class="qz-opt-row">
+            <input type="radio" formControlName="limitMode" value="time" />
+            Time (min)
+          </label>
+          @if (limitModeSig() === 'iterations') {
+            <input type="number" min="1" max="200" formControlName="iterations" class="qz-num" aria-label="Iterations" />
+          } @else {
+            <input type="number" min="1" max="60" formControlName="timeMinutes" class="qz-num" aria-label="Minutes" />
+          }
         </div>
       </div>
 
@@ -108,10 +120,15 @@
     <div class="qz-run-head">
       <h2 class="qz-run-title">
         Melody
-        <span class="qz-progress-pip">{{ idx() }} / {{ c.iterations }}</span>
+        @if (c.limitMode === 'iterations') {
+          <span class="qz-progress-pip">{{ idx() }} / {{ c.iterations }}</span>
+        }
         <span class="qz-progress-pip">{{ c.tonic }} {{ c.mode }}</span>
       </h2>
       <div class="qz-run-actions">
+        @if (micStarted() && c.limitMode === 'time') {
+          <span class="qz-timer-pip" role="status" aria-live="polite">Timer started</span>
+        }
         <button class="secondary" (click)="stopAndReset()">Stop</button>
         <button (click)="startMic()" [disabled]="micStarted()">Start Mic</button>
       </div>
@@ -149,13 +166,20 @@
 
 @if (phase() === 'done' && cfg(); as c) {
   <div class="qz-done" role="main" aria-label="Melody complete">
-    <p class="qz-done-eyebrow">Session complete</p>
-    <p class="qz-done-score" aria-label="{{ score() }} of {{ c.iterations }} phrases">
-      {{ score() }}<span class="qz-done-denom"> / {{ c.iterations }}</span>
-    </p>
-    <p class="qz-done-sub">
-      {{ score() === c.iterations ? 'Every phrase, clean.' : score() === 0 ? 'Keep practicing.' : 'Nicely played.' }}
-    </p>
+    @if (endedByTimer()) {
+      <p class="qz-done-sub">Times up!</p>
+      <p class="qz-done-score" aria-label="{{ score() }} phrases completed">
+        {{ score() }}<span class="qz-done-denom"> phrases</span>
+      </p>
+    } @else {
+      <p class="qz-done-eyebrow">Session complete</p>
+      <p class="qz-done-score" aria-label="{{ score() }} of {{ c.iterations }} phrases">
+        {{ score() }}<span class="qz-done-denom"> / {{ c.iterations }}</span>
+      </p>
+      <p class="qz-done-sub">
+        {{ score() === c.iterations ? 'Every phrase, clean.' : score() === 0 ? 'Keep practicing.' : 'Nicely played.' }}
+      </p>
+    }
     <div class="qz-done-restart">
       <button (click)="reset()">Try again</button>
     </div>

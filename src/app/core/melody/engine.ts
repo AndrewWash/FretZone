@@ -14,6 +14,8 @@ export function defaultConfig(): MelodyConfig {
     strings: [1, 2, 3, 4, 5, 6],
     iterations: 5,
     bars: 2,
+    limitMode: 'iterations',
+    timeMinutes: 3,
     a4: 440,
     centsTolerance: 25,
   };
