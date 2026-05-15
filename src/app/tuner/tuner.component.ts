@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { PitchDetectService, Unsubscribe } from '../core/audio/pitch-detect.service';
@@ -6,6 +6,8 @@ import { midiToFreq, midiToNoteName } from '../core/theory/note';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
 
 const STORAGE_KEY = 'fretzone.tuner.a4.v1';
+const IN_TUNE_CENTS = 5;
+const METER_RANGE = 50;
 
 @Component({
   selector: 'app-tuner',
@@ -27,16 +29,38 @@ export class TunerComponent implements OnDestroy {
   protected cents = signal<number | null>(null);
   protected error = signal<string | null>(null);
 
-  protected hzText = () => {
+  protected hzText = computed(() => {
     const v = this.hz();
-    return v == null ? '--' : `${v.toFixed(1)} Hz`;
-  };
-  protected noteText = () => this.note();
-  protected centsText = () => {
+    return v == null ? '—' : `${v.toFixed(1)} Hz`;
+  });
+
+  protected centsText = computed(() => {
     const c = this.cents();
-    if (c == null) return '--';
+    if (c == null) return '—';
     return (c > 0 ? '+' : '') + c.toFixed(1);
-  };
+  });
+
+  protected hasReading = computed(() => this.hz() != null && this.cents() != null);
+
+  protected inTune = computed(() => {
+    const c = this.cents();
+    return c != null && Math.abs(c) < IN_TUNE_CENTS;
+  });
+
+  protected meterOffsetPct = computed(() => {
+    const c = this.cents();
+    if (c == null) return 50;
+    const clamped = Math.max(-METER_RANGE, Math.min(METER_RANGE, c));
+    return 50 + (clamped / METER_RANGE) * 50;
+  });
+
+  protected statusBadge = computed(() => {
+    if (!this.running()) return 'Idle';
+    if (!this.hasReading()) return 'Listening…';
+    if (this.inTune()) return 'In tune';
+    const c = this.cents() ?? 0;
+    return c > 0 ? 'Sharp' : 'Flat';
+  });
 
   private unsub: Unsubscribe | null = null;
 
@@ -65,7 +89,7 @@ export class TunerComponent implements OnDestroy {
     this.service.stop();
     this.running.set(false);
     this.hz.set(null);
-    this.note.set('--');
+    this.note.set('—');
     this.cents.set(null);
   }
 
