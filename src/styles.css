@@ -1322,10 +1322,15 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   padding: 2rem 1.5rem 3rem;
   outline: none;
   animation: fz-scale-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.tb-metronome-top {
+  display: block;
+  flex-shrink: 0;
+  margin-bottom: 0.5rem;
 }
 
 .tb-focus {
@@ -1337,6 +1342,7 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
   text-align: center;
   max-width: 60rem;
   width: 100%;
+  margin-top: auto;
   animation: fz-fade-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -1380,7 +1386,8 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
 }
 
 .tb-bottom {
-  margin-top: 3rem;
+  margin-top: 1.5rem;
+  margin-bottom: auto;
   min-height: 4rem;
   display: flex;
   flex-direction: column;
@@ -1452,5 +1459,204 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
 
 .tb-done-actions {
   margin-top: 2rem;
+}
+
+/* ══════════════════════════════════════════════
+   Metronome bar
+   ══════════════════════════════════════════════ */
+.fz-metronome {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+  padding: 0.625rem 1rem;
+  margin: 0.5rem 1.25rem;
+  background: var(--fz-s2);
+  border: 1px solid var(--fz-b0);
+  border-radius: var(--fz-radius);
+}
+
+.fz-metronome-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.75rem;
+  background: var(--fz-s2);
+  color: var(--fz-t2);
+  border: 1px solid var(--fz-b0);
+  border-radius: 999px;
+  font-family: var(--fz-display);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.fz-metronome-toggle:hover {
+  color: var(--fz-t1);
+  border-color: var(--fz-b1);
+}
+
+.fz-metronome-toggle.is-on {
+  color: var(--fz-accent-text);
+  background: var(--fz-accent-bg);
+  border-color: oklch(0.62 0.24 285 / 0.35);
+}
+
+.fz-metronome-toggle:focus-visible {
+  outline: 2px solid var(--fz-accent);
+  outline-offset: 2px;
+}
+
+.fz-metronome-toggle-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--fz-t3);
+  transition: background 120ms ease;
+}
+
+.fz-metronome-toggle.is-on .fz-metronome-toggle-dot {
+  background: var(--fz-accent);
+}
+
+.fz-metronome-pulse {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--fz-b1);
+  opacity: 0.35;
+  transition: opacity 80ms ease, background 80ms ease, transform 80ms ease;
+}
+
+.fz-metronome-pulse.is-pulsing {
+  animation: fz-metronome-tick 120ms ease-out;
+}
+
+.fz-metronome-pulse.is-pulsing.is-down {
+  background: var(--fz-accent);
+}
+
+.fz-metronome-pulse.is-pulsing:not(.is-down) {
+  background: var(--fz-accent-dim);
+}
+
+@keyframes fz-metronome-tick {
+  0% { opacity: 1; transform: scale(1.6); }
+  100% { opacity: 0.45; transform: scale(1); }
+}
+
+.fz-metronome-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.fz-metronome-lbl {
+  font-family: var(--fz-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fz-t3);
+}
+
+.fz-metronome-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 8rem;
+  height: 0.3rem;
+  background: var(--fz-b0);
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+
+.fz-metronome-slider:focus-visible {
+  outline: 2px solid var(--fz-accent);
+  outline-offset: 4px;
+}
+
+.fz-metronome-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  background: var(--fz-accent);
+  border: 2px solid var(--fz-s0);
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.fz-metronome-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+.fz-metronome-slider::-moz-range-thumb {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  background: var(--fz-accent);
+  border: 2px solid var(--fz-s0);
+  cursor: pointer;
+}
+
+.fz-metronome-readout {
+  font-family: var(--fz-display);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--fz-t2);
+  font-variant-numeric: tabular-nums;
+  min-width: 3.5rem;
+}
+
+.fz-metronome-sig {
+  display: inline-flex;
+  border: 1px solid var(--fz-b0);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--fz-s2);
+}
+
+.fz-metronome-sig-btn {
+  padding: 0.25rem 0.6rem;
+  background: transparent;
+  color: var(--fz-t3);
+  border: none;
+  font-family: var(--fz-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.fz-metronome-sig-btn:hover {
+  color: var(--fz-t1);
+}
+
+.fz-metronome-sig-btn.is-on {
+  color: var(--fz-accent-text);
+  background: var(--fz-accent-bg);
+}
+
+.fz-metronome-sig-btn:focus-visible {
+  outline: 2px solid var(--fz-accent);
+  outline-offset: -2px;
+}
+
+@media (max-width: 640px) {
+  .fz-metronome {
+    gap: 0.625rem;
+  }
+  .fz-metronome-slider {
+    width: 6rem;
+  }
+  .fz-metronome-readout {
+    min-width: 2.75rem;
+  }
 }
 

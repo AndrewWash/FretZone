@@ -3,6 +3,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { startWith } from 'rxjs/operators';
+import { MetronomeBarComponent } from '../core/audio/metronome-bar.component';
+import { MetronomeService } from '../core/audio/metronome.service';
 
 interface FieldRow {
   main: string;
@@ -41,7 +43,7 @@ type ImageSlot = 'mainImage' | 'subImage';
 
 @Component({
   selector: 'app-timebase',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, MetronomeBarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './timebase.component.html',
   host: {
@@ -50,6 +52,7 @@ type ImageSlot = 'mainImage' | 'subImage';
 })
 export class TimebaseComponent implements OnDestroy {
   private fb = inject(FormBuilder);
+  private metronome = inject(MetronomeService);
 
   protected fieldsArr: FormArray<FieldGroup>;
   protected form;
@@ -147,6 +150,7 @@ export class TimebaseComponent implements OnDestroy {
     this.fieldIdx.set(0);
     this.remainingSec.set(minutesPerField * 60);
     this.paused.set(false);
+    this.metronome.resetForNewSession();
     this.phase.set('running');
     this.armTimer();
 
@@ -219,6 +223,7 @@ export class TimebaseComponent implements OnDestroy {
   private cleanupRun(): void {
     this.disarmTimer();
     this.paused.set(false);
+    this.metronome.stop();
   }
 
   private makeFieldGroup(row: FieldRow): FieldGroup {
