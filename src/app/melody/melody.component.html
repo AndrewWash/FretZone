@@ -9,14 +9,13 @@
       <div class="qz-config-col" role="group" aria-labelledby="ml-lbl-key">
         <div>
           <span id="ml-lbl-key" class="qz-field-lbl">Difficulty</span>
-          <p class="qz-field-hint">Easy = 8 quarter notes. Intermediate = mixed rhythms with rests.</p>
-          <div class="qz-inline">
-            <label class="qz-opt-row">
-              <input type="radio" formControlName="difficulty" value="Easy" /> Easy
-            </label>
-            <label class="qz-opt-row">
-              <input type="radio" formControlName="difficulty" value="Intermediate" /> Intermediate
-            </label>
+          <p class="qz-field-hint">Easy = quarter notes. Intermediate = mixed rhythms + rests. Expert = full palette + leaps. Custom = pick your own.</p>
+          <div class="qz-inline" role="radiogroup" aria-labelledby="ml-lbl-key">
+            @for (d of difficultyOptions; track d) {
+              <label class="qz-opt-row">
+                <input type="radio" formControlName="difficulty" [value]="d" /> {{ difficultyLabel(d) }}
+              </label>
+            }
           </div>
         </div>
         <div>
@@ -81,9 +80,20 @@
       </div>
 
       <div class="qz-config-col" role="group" aria-labelledby="ml-lbl-opts">
-        <span id="ml-lbl-opts" class="qz-field-lbl">Options</span>
-        <label class="qz-opt-row">A4 (Hz) <input type="number" min="400" max="480" step="0.1" formControlName="a4" class="qz-num" /></label>
-        <label class="qz-opt-row">Tolerance (cents) <input type="number" min="5" max="50" step="1" formControlName="centsTolerance" class="qz-num" /></label>
+        <div role="group" aria-labelledby="ml-lbl-prog">
+          <span id="ml-lbl-prog" class="qz-field-lbl">Chord progression</span>
+          <p class="qz-field-hint">Off = scale only. On = strong beats target chord tones. Random = engine flips a coin per phrase.</p>
+          @for (p of progressionOptions; track p) {
+            <label class="qz-opt-row">
+              <input type="radio" formControlName="progression" [value]="p" /> {{ progressionLabel(p) }}
+            </label>
+          }
+        </div>
+        <div>
+          <span id="ml-lbl-opts" class="qz-field-lbl">Audio</span>
+          <label class="qz-opt-row">A4 (Hz) <input type="number" min="400" max="480" step="0.1" formControlName="a4" class="qz-num" /></label>
+          <label class="qz-opt-row">Tolerance (cents) <input type="number" min="5" max="50" step="1" formControlName="centsTolerance" class="qz-num" /></label>
+        </div>
       </div>
     </div>
 
@@ -103,13 +113,68 @@
       </div>
     </fieldset>
 
+    @if (isCustom()) {
+      <fieldset class="qz-section">
+        <legend class="qz-sr">Custom mode</legend>
+        <div class="qz-section-label" aria-hidden="true">
+          <span class="qz-section-num">02</span>
+          <span class="qz-section-title">Custom</span>
+        </div>
+
+        <div role="group" aria-labelledby="ml-lbl-notes">
+          <span id="ml-lbl-notes" class="qz-field-lbl">Note values</span>
+          <p class="qz-field-hint">Pick which note lengths the engine may use. Engine biases longer values onto downbeats.</p>
+          <div class="qz-chips" formArrayName="allowedNoteValues">
+            @for (ctrl of noteValuesArr.controls; track $index) {
+              <label class="qz-chip">
+                <input type="checkbox" [formControlName]="$index" />
+                <span class="qz-chip-label">{{ durationLabel(noteDurationOptions[$index]) }}</span>
+              </label>
+            }
+          </div>
+        </div>
+
+        <div role="group" aria-labelledby="ml-lbl-rests">
+          <span id="ml-lbl-rests" class="qz-field-lbl">Rests</span>
+          <label class="qz-opt-row">
+            <input type="checkbox" formControlName="allowRests" /> Allow rests
+          </label>
+          @if (allowRestsSig()) {
+            <div class="qz-chips" formArrayName="allowedRestValues">
+              @for (ctrl of restValuesArr.controls; track $index) {
+                <label class="qz-chip">
+                  <input type="checkbox" [formControlName]="$index" />
+                  <span class="qz-chip-label">{{ durationLabel(restDurationOptions[$index]) }}</span>
+                </label>
+              }
+            </div>
+          }
+        </div>
+
+        <div role="group" aria-labelledby="ml-lbl-jump">
+          <span id="ml-lbl-jump" class="qz-field-lbl">Note jumps</span>
+          <p class="qz-field-hint">Easy = stepwise + 3rds. Medium = up to a 5th. Hard = up to an octave.</p>
+          <div class="qz-inline" role="radiogroup" aria-labelledby="ml-lbl-jump">
+            @for (j of jumpTierOptions; track j) {
+              <label class="qz-opt-row">
+                <input type="radio" formControlName="jumpTier" [value]="j" /> {{ j }}
+              </label>
+            }
+          </div>
+        </div>
+      </fieldset>
+    }
+
     <div class="qz-action">
-      <button type="submit" class="qz-start" [disabled]="poolCount() < 2">
+      <button type="submit" class="qz-start" [disabled]="poolCount() < 2 || !customValid()">
         Start Melody <span class="qz-start-arrow" aria-hidden="true">→</span>
       </button>
       <span class="qz-pool-count">{{ poolCount() }} scale tones available</span>
       @if (poolCount() < 2) {
         <span class="qz-pool-err" role="alert">Not enough notes: widen fret range or pick different key/mode</span>
+      }
+      @if (poolCount() >= 2 && !customValid()) {
+        <span class="qz-pool-err" role="alert">Custom mode needs at least one note value (and one rest value if rests are on)</span>
       }
     </div>
   </form>

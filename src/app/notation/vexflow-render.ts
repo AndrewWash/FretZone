@@ -310,7 +310,10 @@ export function renderMelodyEl(
 
 function toMelodyStaveNote(t: MelodyTickable, tonic: BaseLetter, mode: ModeName) {
   if (t.kind === 'rest') {
-    return new Flow.StaveNote({ keys: ['b/4'], duration: t.duration === 'q' ? 'qr' : '8r' });
+    // VexFlow names rests by appending 'r' to the duration code (e.g. 'qr',
+    // '8r'). 'b/4' positions the rest glyph at staff middle, which VexFlow
+    // then overrides per-duration to the conventional rest baseline.
+    return new Flow.StaveNote({ keys: ['b/4'], duration: `${t.duration}r` });
   }
   const writtenMidi = (t.midi ?? 60) + 12;
   const sp = keyAwareSpelling(writtenMidi, tonic, mode);
