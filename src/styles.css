@@ -1147,8 +1147,100 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
   line-height: 1;
 }
 
+.tb-row-images {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  min-width: 0;
+}
+
+.tb-thumb {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  background: var(--fz-s1);
+  border: 1px solid var(--fz-b0);
+  border-radius: var(--fz-radius-sm);
+  overflow: hidden;
+  line-height: 0;
+  flex: 0 0 auto;
+}
+
+.tb-thumb-img {
+  display: block;
+  height: 56px;
+  width: auto;
+  max-width: 220px;
+  object-fit: contain;
+}
+
+.tb-thumb-tag {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  font-family: var(--fz-display);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fz-t2);
+  background: oklch(0.16 0.016 258 / 0.82);
+  padding: 0.1rem 0.35rem;
+  border-top-right-radius: var(--fz-radius-sm);
+  line-height: 1;
+}
+
+.tb-thumb-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--fz-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--fz-t1);
+  background: oklch(0.16 0.016 258 / 0.85);
+  border: 1px solid var(--fz-b0);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.tb-thumb-remove:hover {
+  background: var(--fz-b0);
+}
+.tb-thumb-remove:focus-visible {
+  outline: 2px solid var(--fz-accent);
+  outline-offset: 1px;
+}
+
 .tb-rows-actions {
   margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.tb-paste-hint {
+  font-size: 0.75rem;
+  color: var(--fz-t3);
+}
+
+.tb-paste-error {
+  margin: 0.75rem 0 0;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.8125rem;
+  color: var(--fz-t1);
+  background: oklch(0.30 0.08 25 / 0.25);
+  border: 1px solid oklch(0.55 0.16 25 / 0.55);
+  border-radius: var(--fz-radius-sm);
 }
 
 .tb-add {
@@ -1266,6 +1358,25 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
   letter-spacing: -0.01em;
   color: var(--fz-t2);
   max-width: 50rem;
+}
+
+.tb-run-img {
+  display: block;
+  max-width: min(90vw, 56rem);
+  max-height: 55vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  background: var(--fz-s1);
+  border: 1px solid var(--fz-b0);
+  border-radius: var(--fz-radius-sm);
+}
+.tb-run-img-sub {
+  max-height: 40vh;
+}
+.tb-run-paused .tb-run-img {
+  opacity: 0.55;
+  transition: opacity 240ms ease-out;
 }
 
 .tb-bottom {

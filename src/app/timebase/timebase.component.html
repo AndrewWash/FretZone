@@ -48,11 +48,13 @@
                      formControlName="main"
                      class="tb-input tb-input-main"
                      placeholder="Exercise name"
+                     (paste)="onPaste($event, g, 'mainImage')"
                      [attr.aria-label]="'Field ' + ($index + 1) + ' main'" />
               <input type="text"
                      formControlName="sub"
                      class="tb-input tb-input-sub"
                      placeholder="Detail (optional)"
+                     (paste)="onPaste($event, g, 'subImage')"
                      [attr.aria-label]="'Field ' + ($index + 1) + ' detail'" />
             </div>
             <button type="button"
@@ -62,6 +64,34 @@
                     [attr.aria-label]="'Remove field ' + ($index + 1)">
               ✕
             </button>
+            @if (g.controls.mainImage.value || g.controls.subImage.value) {
+              <div class="tb-row-images">
+                @if (g.controls.mainImage.value; as src) {
+                  <figure class="tb-thumb">
+                    <img [src]="src" alt="" class="tb-thumb-img" />
+                    <figcaption class="tb-thumb-tag" aria-hidden="true">Main</figcaption>
+                    <button type="button"
+                            class="tb-thumb-remove"
+                            (click)="clearImage(g, 'mainImage')"
+                            [attr.aria-label]="'Remove main image from field ' + ($index + 1)">
+                      ✕
+                    </button>
+                  </figure>
+                }
+                @if (g.controls.subImage.value; as src) {
+                  <figure class="tb-thumb">
+                    <img [src]="src" alt="" class="tb-thumb-img" />
+                    <figcaption class="tb-thumb-tag" aria-hidden="true">Detail</figcaption>
+                    <button type="button"
+                            class="tb-thumb-remove"
+                            (click)="clearImage(g, 'subImage')"
+                            [attr.aria-label]="'Remove detail image from field ' + ($index + 1)">
+                      ✕
+                    </button>
+                  </figure>
+                }
+              </div>
+            }
           </div>
         }
       </div>
@@ -70,7 +100,14 @@
         <button type="button" class="secondary tb-add" (click)="addField()">
           + Add field
         </button>
+        <span class="tb-paste-hint">
+          Tip: focus a field and paste an image (<kbd class="tb-kbd">Ctrl</kbd>+<kbd class="tb-kbd">V</kbd>) to use it as a visual cue.
+        </span>
       </div>
+
+      @if (pasteError(); as err) {
+        <p class="tb-paste-error" role="status" aria-live="polite">{{ err }}</p>
+      }
     </fieldset>
 
     <div class="tb-action">
@@ -92,11 +129,19 @@
     @for (key of [cycleIdx() + '-' + fieldIdx()]; track key) {
       @if (currentField(); as f) {
         <div class="tb-focus">
-          <h2 class="tb-main" role="status" aria-live="polite" aria-atomic="true">
-            {{ f.main }}
-          </h2>
+          @if (f.main) {
+            <h2 class="tb-main" role="status" aria-live="polite" aria-atomic="true">
+              {{ f.main }}
+            </h2>
+          }
+          @if (f.mainImage) {
+            <img [src]="f.mainImage" [alt]="f.main || 'Main image'" class="tb-run-img tb-run-img-main" />
+          }
           @if (f.sub) {
             <p class="tb-sub">{{ f.sub }}</p>
+          }
+          @if (f.subImage) {
+            <img [src]="f.subImage" [alt]="f.sub || 'Detail image'" class="tb-run-img tb-run-img-sub" />
           }
         </div>
       }

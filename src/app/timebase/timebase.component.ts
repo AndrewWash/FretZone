@@ -6,7 +6,9 @@ import { startWith } from 'rxjs/operators';
 
 interface FieldRow {
   main: string;
+  mainImage: string | null;
   sub: string;
+  subImage: string | null;
 }
 
 interface TimebaseConfig {
@@ -17,19 +19,25 @@ interface TimebaseConfig {
 
 const DEFAULT_FIELD_COUNT = 3;
 const COUNTDOWN_WARNING_SEC = 5;
+const MAX_PASTE_IMAGE_BYTES = 5 * 1024 * 1024;
+const PASTE_ERROR_CLEAR_MS = 3000;
 
 const FIVE_MINUTE_DRILL: FieldRow[] = [
-  { main: 'Independence Exercise', sub: 'Spider Walk' },
-  { main: 'RH pattern/arp',         sub: 'Type finger pattern here ex: imaima' },
-  { main: 'Scales',                 sub: 'quarter note, dotted, 16th, etc' },
-  { main: 'Slurs',                  sub: '' },
-  { main: 'Strength',               sub: 'isometric Barre Hold' },
+  { main: 'Independence Exercise', mainImage: null, sub: 'Spider Walk', subImage: null },
+  { main: 'RH pattern/arp',         mainImage: null, sub: 'Type finger pattern here ex: imaima', subImage: null },
+  { main: 'Scales',                 mainImage: null, sub: 'quarter note, dotted, 16th, etc', subImage: null },
+  { main: 'Slurs',                  mainImage: null, sub: '', subImage: null },
+  { main: 'Strength',               mainImage: null, sub: 'isometric Barre Hold', subImage: null },
 ];
 
 type FieldGroup = FormGroup<{
   main: FormControl<string>;
+  mainImage: FormControl<string | null>;
   sub: FormControl<string>;
+  subImage: FormControl<string | null>;
 }>;
+
+type ImageSlot = 'mainImage' | 'subImage';
 
 @Component({
   selector: 'app-timebase',
@@ -52,6 +60,9 @@ export class TimebaseComponent implements OnDestroy {
   protected fieldIdx = signal(0);
   protected remainingSec = signal(0);
   protected paused = signal(false);
+  protected pasteError = signal<string | null>(null);
+
+  private pasteErrorTimer: ReturnType<typeof setTimeout> | null = null;
 
   protected hasAnyMain;
   protected currentField = computed<FieldRow | null>(() => {
@@ -68,7 +79,9 @@ export class TimebaseComponent implements OnDestroy {
 
   constructor() {
     this.fieldsArr = this.fb.array<FieldGroup>(
-      Array.from({ length: DEFAULT_FIELD_COUNT }, () => this.makeFieldGroup({ main: '', sub: '' })),
+      Array.from({ length: DEFAULT_FIELD_COUNT }, () =>
+        this.makeFieldGroup({ main: '', mainImage: null, sub: '', subImage: null }),
+      ),
     );
 
     this.form = this.fb.group({
@@ -83,16 +96,22 @@ export class TimebaseComponent implements OnDestroy {
     );
     this.hasAnyMain = computed(() => {
       void valueSig();
-      return this.fieldsArr.controls.some(g => g.controls.main.value.trim().length > 0);
+      return this.fieldsArr.controls.some(g =>
+        g.controls.main.value.trim().length > 0 || g.controls.mainImage.value !== null,
+      );
     });
   }
 
   ngOnDestroy(): void {
     this.cleanupRun();
+    if (this.pasteErrorTimer != null) {
+      clearTimeout(this.pasteErrorTimer);
+      this.pasteErrorTimer = null;
+    }
   }
 
   protected addField(): void {
-    this.fieldsArr.push(this.makeFieldGroup({ main: '', sub: '' }));
+    this.fieldsArr.push(this.makeFieldGroup({ main: '', mainImage: null, sub: '', subImage: null }));
   }
 
   protected removeField(idx: number): void {
@@ -113,8 +132,13 @@ export class TimebaseComponent implements OnDestroy {
     const cycles = Math.max(1, Math.floor(Number(this.form.controls.cycles.value) || 1));
     const minutesPerField = Math.max(1, Math.floor(Number(this.form.controls.minutesPerField.value) || 1));
     const fields: FieldRow[] = this.fieldsArr.controls
-      .map(g => ({ main: g.controls.main.value.trim(), sub: g.controls.sub.value.trim() }))
-      .filter(f => f.main.length > 0);
+      .map(g => ({
+        main: g.controls.main.value.trim(),
+        mainImage: g.controls.mainImage.value,
+        sub: g.controls.sub.value.trim(),
+        subImage: g.controls.subImage.value,
+      }))
+      .filter(f => f.main.length > 0 || f.mainImage !== null);
 
     if (fields.length === 0) return;
 
@@ -198,9 +222,52 @@ export class TimebaseComponent implements OnDestroy {
   }
 
   private makeFieldGroup(row: FieldRow): FieldGroup {
-    return this.fb.nonNullable.group({
+    return this.fb.group({
       main: this.fb.nonNullable.control(row.main),
+      mainImage: new FormControl<string | null>(row.mainImage),
       sub: this.fb.nonNullable.control(row.sub),
+      subImage: new FormControl<string | null>(row.subImage),
     });
+  }
+
+  protected onPaste(event: ClipboardEvent, group: FieldGroup, slot: ImageSlot): void {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        event.preventDefault();
+        if (file.size > MAX_PASTE_IMAGE_BYTES) {
+          this.flashPasteError('Image too large (max 5 MB).');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          if (typeof result === 'string') {
+            group.controls[slot].setValue(result);
+            group.controls[slot].markAsDirty();
+          }
+        };
+        reader.onerror = () => this.flashPasteError('Could not read pasted image.');
+        reader.readAsDataURL(file);
+        return;
+      }
+    }
+  }
+
+  protected clearImage(group: FieldGroup, slot: ImageSlot): void {
+    group.controls[slot].setValue(null);
+    group.controls[slot].markAsDirty();
+  }
+
+  private flashPasteError(message: string): void {
+    this.pasteError.set(message);
+    if (this.pasteErrorTimer != null) clearTimeout(this.pasteErrorTimer);
+    this.pasteErrorTimer = setTimeout(() => {
+      this.pasteError.set(null);
+      this.pasteErrorTimer = null;
+    }, PASTE_ERROR_CLEAR_MS);
   }
 }
