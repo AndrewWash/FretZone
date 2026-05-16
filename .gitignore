@@ -44,7 +44,9 @@ __screenshots__/
 Thumbs.db
 
 #random
-/.claude/
+# Track shared .claude tooling (agents, commands, skills, CLAUDE.md);
+# ignore only personal/local settings.
+/.claude/settings.local.json
 /.junie/
 /.agents/
 /.impeccable/
