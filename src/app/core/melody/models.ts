@@ -23,6 +23,12 @@ export const DURATION_BEATS: Record<TickDuration, number> = {
   w: 4, h: 2, q: 1, '8': 0.5, '16': 0.25, '32': 0.125,
 };
 
+// Supported meters. Beats per bar are quarter-note beats — both meters use a
+// quarter-note beat value, they differ only in how many beats fill a bar.
+export type TimeSignature = '4/4' | '3/4';
+export const TIME_SIGNATURE_OPTIONS: readonly TimeSignature[] = ['4/4', '3/4'];
+export const BEATS_PER_BAR: Record<TimeSignature, number> = { '4/4': 4, '3/4': 3 };
+
 export type JumpTier = 'Easy' | 'Medium' | 'Hard';
 
 export interface CustomOptions {
@@ -30,6 +36,7 @@ export interface CustomOptions {
   allowRests: boolean;
   allowedRestValues: TickDuration[];
   jumpTier: JumpTier;
+  timeSignature: TimeSignature;
 }
 
 export interface MelodyConfig {
@@ -62,4 +69,5 @@ export interface MelodyPhrase {
   tickables: MelodyTickable[];
   bars: MelodyTickable[][];
   noteMidis: number[];   // sounding MIDIs in play order, used for detection
+  timeSignature: TimeSignature;
 }

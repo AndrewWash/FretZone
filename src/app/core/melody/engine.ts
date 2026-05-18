@@ -5,7 +5,7 @@ import { planHarmony } from './harmony-planner';
 import { planRhythm, type RhythmSlot } from './rhythm-planner';
 import { planPitches, type TierLimits } from './pitch-planner';
 import { playablePool } from './engine-pool';
-import { PHRASE_BAR_OPTIONS } from './models';
+import { BEATS_PER_BAR, PHRASE_BAR_OPTIONS } from './models';
 import type {
   CustomOptions,
   Difficulty,
@@ -14,6 +14,7 @@ import type {
   MelodyPhrase,
   MelodyTickable,
   PhraseBarCount,
+  TimeSignature,
 } from './models';
 
 // Re-export so existing call sites that import from `./engine` keep working.
@@ -26,7 +27,14 @@ export function defaultCustomOptions(): CustomOptions {
     allowRests: true,
     allowedRestValues: ['q'],
     jumpTier: 'Easy',
+    timeSignature: '4/4',
   };
+}
+
+// Time signature is a Custom-mode option; the fixed difficulty tiers always
+// generate in 4/4 so their character stays predictable.
+function timeSignatureFor(cfg: MelodyConfig): TimeSignature {
+  return cfg.difficulty === 'Custom' ? cfg.custom.timeSignature : '4/4';
 }
 
 export function defaultConfig(): MelodyConfig {
@@ -82,10 +90,12 @@ export function generatePhrase(cfg: MelodyConfig): MelodyPhrase {
   }
 
   const barCount = normalizeBarCount(cfg.bars);
+  const timeSignature = timeSignatureFor(cfg);
+  const beatsPerBar = BEATS_PER_BAR[timeSignature];
   const form = planForm(barCount, cfg.difficulty);
   const contour = planContour(barCount);
   const harmony = planHarmony(cfg);
-  const slots = planRhythm(barCount, cfg.difficulty, cfg.custom);
+  const slots = planRhythm(barCount, cfg.difficulty, cfg.custom, beatsPerBar);
   const limits = limitsFor(cfg);
 
   let pitches = planPitches({ pool, slots, contour, form, harmony, limits });
@@ -93,7 +103,7 @@ export function generatePhrase(cfg: MelodyConfig): MelodyPhrase {
     pitches = randomWalk(pool, slots.filter(s => !s.isRest).length, limits);
   }
 
-  return assemblePhrase(slots, pitches, barCount);
+  return assemblePhrase(slots, pitches, barCount, beatsPerBar, timeSignature);
 }
 
 function randomWalk(
@@ -116,7 +126,13 @@ function randomWalk(
   return out;
 }
 
-function assemblePhrase(slots: RhythmSlot[], pitches: number[], barCount: PhraseBarCount): MelodyPhrase {
+function assemblePhrase(
+  slots: RhythmSlot[],
+  pitches: number[],
+  barCount: PhraseBarCount,
+  beatsPerBar: number,
+  timeSignature: TimeSignature,
+): MelodyPhrase {
   const tickables: MelodyTickable[] = [];
   let pIdx = 0;
   for (const s of slots) {
@@ -128,12 +144,12 @@ function assemblePhrase(slots: RhythmSlot[], pitches: number[], barCount: Phrase
   }
   const bars: MelodyTickable[][] = [];
   for (let b = 0; b < barCount; b++) {
-    const lo = b * 4;
-    const hi = lo + 4;
+    const lo = b * beatsPerBar;
+    const hi = lo + beatsPerBar;
     bars.push(tickables.filter(t => t.beat >= lo && t.beat < hi));
   }
   const noteMidis = tickables.filter(t => t.kind === 'note').map(t => t.midi!);
-  return { tickables, bars, noteMidis };
+  return { tickables, bars, noteMidis, timeSignature };
 }
 
 export const ALL_TONICS = [...BASE_LETTERS];

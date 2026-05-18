@@ -1,7 +1,8 @@
 import { Flow } from 'vexflow';
 import { spellMidi, AccidentalMode, BaseLetter } from '../core/theory/note';
 import { keyAwareSpelling, keySignatureSpec, tonicPc, ModeName } from '../core/theory/modes';
-import type { MelodyTickable } from '../core/melody/models';
+import type { MelodyTickable, TimeSignature } from '../core/melody/models';
+import { BEATS_PER_BAR } from '../core/melody/models';
 
 export type NotationTheme = 'light' | 'dark';
 
@@ -169,6 +170,7 @@ export interface MelodyRenderOptions {
   tonic?: BaseLetter;
   mode?: ModeName;
   theme?: NotationTheme;
+  timeSignature?: TimeSignature;
 }
 
 export function renderMelodyEl(
@@ -180,6 +182,8 @@ export function renderMelodyEl(
   const width = opts.width ?? 720;
   const tonic: BaseLetter = opts.tonic ?? 'C';
   const mode: ModeName = opts.mode ?? 'Ionian';
+  const timeSignature: TimeSignature = opts.timeSignature ?? '4/4';
+  const beatsPerBar = BEATS_PER_BAR[timeSignature];
   const { FG, BG, DIM } = themeColors(opts.theme);
   const DIM_STYLE = { fillStyle: DIM, strokeStyle: DIM };
   const keySpec = keySignatureSpec(tonic, mode);
@@ -205,7 +209,7 @@ export function renderMelodyEl(
 
   const buildVoice = (ticks: MelodyTickable[]) => {
     const notes = ticks.map(t => toMelodyStaveNote(t, tonic, mode));
-    const voice = new Flow.Voice({ num_beats: 4, beat_value: 4 });
+    const voice = new Flow.Voice({ num_beats: beatsPerBar, beat_value: 4 });
     voice.setMode(Flow.Voice.Mode.SOFT);
     voice.addTickables(notes);
     return { voice, notes };
@@ -269,7 +273,7 @@ export function renderMelodyEl(
   const probe = new Flow.Stave(0, 0, 400)
     .addClef('treble')
     .addKeySignature(keySpec)
-    .addTimeSignature('4/4');
+    .addTimeSignature(timeSignature);
   probe.setContext(ctx);
   let leadWidth = probe.getNoteStartX() - probe.getX();
   if (!isFinite(leadWidth) || leadWidth < 60) leadWidth = 90;
@@ -291,7 +295,7 @@ export function renderMelodyEl(
       const staveWidth = i === 0 ? noteArea + leadWidth : noteArea;
       const stave = new Flow.Stave(xCursor, yTop, staveWidth);
       if (i === 0) {
-        stave.addClef('treble').addKeySignature(keySpec).addTimeSignature('4/4');
+        stave.addClef('treble').addKeySignature(keySpec).addTimeSignature(timeSignature);
       }
       styleStave(stave, FG);
       stave.setContext(ctx).draw();

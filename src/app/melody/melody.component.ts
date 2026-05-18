@@ -19,11 +19,13 @@ import type {
   PhraseBarCount,
   ProgressionMode,
   TickDuration,
+  TimeSignature,
 } from '../core/melody/models';
 import {
   ALL_NOTE_DURATIONS,
   ALL_REST_DURATIONS,
   PHRASE_BAR_OPTIONS,
+  TIME_SIGNATURE_OPTIONS,
 } from '../core/melody/models';
 import type { StringId } from '../core/quiz/models';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
@@ -57,6 +59,7 @@ interface MelodyFormValue {
   allowRests: boolean;
   allowedRestValues: boolean[];
   jumpTier: JumpTier;
+  timeSignature: TimeSignature;
 }
 
 @Component({
@@ -77,6 +80,7 @@ export class MelodyComponent implements OnDestroy {
   protected difficultyOptions = DIFFICULTY_OPTIONS;
   protected progressionOptions = PROGRESSION_OPTIONS;
   protected jumpTierOptions = JUMP_TIER_OPTIONS;
+  protected timeSignatureOptions = TIME_SIGNATURE_OPTIONS;
   protected noteDurationOptions: readonly TickDuration[] = ALL_NOTE_DURATIONS;
   protected restDurationOptions: readonly TickDuration[] = ALL_REST_DURATIONS;
   protected durationLabel = (d: TickDuration) => NOTE_DURATION_LABELS[d];
@@ -96,6 +100,7 @@ export class MelodyComponent implements OnDestroy {
   protected heard = signal('--');
   protected status = signal('Waiting...');
   protected micStarted = signal(false);
+  protected micUsed = signal(false);
   protected endedByTimer = signal(false);
   protected limitModeSig = signal<LimitMode>('iterations');
   protected difficultySig = signal<Difficulty>('Easy');
@@ -167,6 +172,7 @@ export class MelodyComponent implements OnDestroy {
       allowRests: this.fb.nonNullable.control(initialCustom.allowRests),
       allowedRestValues: this.restValuesArr,
       jumpTier: this.fb.nonNullable.control<JumpTier>(initialCustom.jumpTier),
+      timeSignature: this.fb.nonNullable.control<TimeSignature>(initialCustom.timeSignature),
     });
 
     this.limitModeSig.set(this.form.controls.limitMode.value);
@@ -225,6 +231,7 @@ export class MelodyComponent implements OnDestroy {
     this.heard.set('--');
     this.playedCount.set(0);
     this.micStarted.set(false);
+    this.micUsed.set(false);
     this.endedByTimer.set(false);
     try {
       this.phrase.set(generatePhrase(c));
@@ -244,6 +251,7 @@ export class MelodyComponent implements OnDestroy {
     try {
       await this.service.startLive();
       this.micStarted.set(true);
+      this.micUsed.set(true);
       this.spinUpDetection();
       this.status.set('Listening... Play the first note.');
       const c = this.cfg();
@@ -315,8 +323,24 @@ export class MelodyComponent implements OnDestroy {
     }
     this.playedCount.set(0);
     this.idx.update(v => v + 1);
-    this.status.set('Next phrase. Play the first note.');
-    setTimeout(() => this.spinUpDetection(), 0);
+    if (this.micStarted()) {
+      this.status.set('Next phrase. Play the first note.');
+      setTimeout(() => this.spinUpDetection(), 0);
+    } else {
+      this.status.set('Next phrase.');
+    }
+  }
+
+  protected next() {
+    const c = this.cfg();
+    if (!c) return;
+    if (c.limitMode === 'iterations' && this.idx() >= c.iterations) {
+      this.status.set('Done!');
+      this.cleanupRun();
+      this.phase.set('done');
+      return;
+    }
+    this.advance();
   }
 
   private tearDownDetection() {
@@ -368,6 +392,7 @@ export class MelodyComponent implements OnDestroy {
         allowRests: v.allowRests,
         allowedRestValues: [...allowedRestValues],
         jumpTier: v.jumpTier,
+        timeSignature: v.timeSignature,
       },
     };
   }
