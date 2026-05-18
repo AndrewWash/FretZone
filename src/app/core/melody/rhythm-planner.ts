@@ -10,10 +10,17 @@ export interface RhythmSlot {
   duration: TickDuration;
   beat: number;
   isRest: boolean;
-  isStrong: boolean;     // beat 0 or 2 of a bar
+  isStrong: boolean;     // metrically strong beat (see isStrongBeat)
   isCadence: boolean;    // sounding slot at/before phrase midpoint
   isFinal: boolean;      // last sounding slot of the phrase
   barIdx: number;        // 0-based bar this slot belongs to
+}
+
+// Metrically strong beats within a bar. 4/4 has two (the downbeat and beat 3);
+// 3/4 has a single strong downbeat.
+function isStrongBeat(beatInBar: number, beatsPerBar: number): boolean {
+  if (beatsPerBar === 4) return beatInBar === 0 || beatInBar === 2;
+  return beatInBar === 0;
 }
 
 interface TierPalette {
@@ -50,11 +57,12 @@ export function planRhythm(
   barCount: PhraseBarCount,
   difficulty: Difficulty,
   custom: CustomOptions,
+  beatsPerBar: number,
 ): RhythmSlot[] {
   const palette = paletteFor(difficulty, custom);
   // Easy mode is deterministic enough that we just fill with quarter notes.
   if (difficulty === 'Easy') {
-    return markCadenceAndFinal(buildSimpleQuarterRhythm(barCount), barCount);
+    return markCadenceAndFinal(buildSimpleQuarterRhythm(barCount, beatsPerBar), barCount, beatsPerBar);
   }
 
   // Try up to a handful of times to produce a phrase that ends on a sounding
@@ -63,18 +71,18 @@ export function planRhythm(
     const slots: RhythmSlot[] = [];
     for (let bar = 0; bar < barCount; bar++) {
       const isLastBar = bar === barCount - 1;
-      fillBar(slots, bar, palette, isLastBar);
+      fillBar(slots, bar, palette, isLastBar, beatsPerBar);
     }
     if (slots.length === 0) continue;
     const last = slots[slots.length - 1];
     // If the last slot turned out to be a rest, retry — we want the phrase
     // to end on a sounding note.
     if (last.isRest) continue;
-    return markCadenceAndFinal(slots, barCount);
+    return markCadenceAndFinal(slots, barCount, beatsPerBar);
   }
 
   // Failsafe: deterministic fill if randomized passes never settled.
-  return markCadenceAndFinal(buildSimpleQuarterRhythm(barCount), barCount);
+  return markCadenceAndFinal(buildSimpleQuarterRhythm(barCount, beatsPerBar), barCount, beatsPerBar);
 }
 
 function paletteFor(difficulty: Difficulty, custom: CustomOptions): TierPalette {
@@ -99,17 +107,17 @@ function hasAny(arr: TickDuration[], wanted: TickDuration[]): boolean {
   return wanted.some(w => arr.includes(w));
 }
 
-function buildSimpleQuarterRhythm(barCount: PhraseBarCount): RhythmSlot[] {
+function buildSimpleQuarterRhythm(barCount: PhraseBarCount, beatsPerBar: number): RhythmSlot[] {
   const slots: RhythmSlot[] = [];
-  for (let i = 0; i < barCount * 4; i++) {
+  for (let i = 0; i < barCount * beatsPerBar; i++) {
     slots.push({
       duration: 'q',
       beat: i,
       isRest: false,
-      isStrong: i % 2 === 0,
+      isStrong: isStrongBeat(i % beatsPerBar, beatsPerBar),
       isCadence: false,
       isFinal: false,
-      barIdx: Math.floor(i / 4),
+      barIdx: Math.floor(i / beatsPerBar),
     });
   }
   return slots;
@@ -123,13 +131,14 @@ function fillBar(
   barIdx: number,
   palette: TierPalette,
   isLastBar: boolean,
+  beatsPerBar: number,
 ): void {
-  const barStartBeat = barIdx * 4;
+  const barStartBeat = barIdx * beatsPerBar;
   let cursor = 0;
-  while (cursor < 4) {
-    const remaining = 4 - cursor;
+  while (cursor < beatsPerBar) {
+    const remaining = beatsPerBar - cursor;
     const beatInBar = cursor;
-    const isStrong = beatInBar === 0 || beatInBar === 2;
+    const isStrong = isStrongBeat(beatInBar, beatsPerBar);
     const onBeat = Number.isInteger(beatInBar);
 
     // Decide rest vs note. Never end the last bar on a rest; never start the
@@ -233,10 +242,14 @@ function weightFor(
 // midpoint) and the final sounding slot. Both are read by the pitch planner
 // to enforce a half cadence on V/IV at the midpoint and resolution to I at
 // the end.
-function markCadenceAndFinal(slots: RhythmSlot[], barCount: PhraseBarCount): RhythmSlot[] {
+function markCadenceAndFinal(
+  slots: RhythmSlot[],
+  barCount: PhraseBarCount,
+  beatsPerBar: number,
+): RhythmSlot[] {
   const sounding = slots.filter(s => !s.isRest);
   if (!sounding.length) return slots;
-  const midBeat = (barCount * 4) / 2;
+  const midBeat = (barCount * beatsPerBar) / 2;
   const cadence = [...sounding].reverse().find(s => s.beat < midBeat);
   if (cadence) cadence.isCadence = true;
   sounding[sounding.length - 1].isFinal = true;

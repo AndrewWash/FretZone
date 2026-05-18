@@ -800,6 +800,12 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
   }
 }
 
+.mel-run-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 1.5rem 1.25rem;
+}
+
 /* ══════════════════════════════════════════════
    SCALES — page-specific extensions
 ══════════════════════════════════════════════ */

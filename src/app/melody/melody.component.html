@@ -121,6 +121,18 @@
           <span class="qz-section-title">Custom</span>
         </div>
 
+        <div role="group" aria-labelledby="ml-lbl-meter">
+          <span id="ml-lbl-meter" class="qz-field-lbl">Time signature</span>
+          <p class="qz-field-hint">4/4 = four beats per bar. 3/4 = three beats per bar, a waltz feel.</p>
+          <div class="qz-inline" role="radiogroup" aria-labelledby="ml-lbl-meter">
+            @for (ts of timeSignatureOptions; track ts) {
+              <label class="qz-opt-row">
+                <input type="radio" formControlName="timeSignature" [value]="ts" /> {{ ts }}
+              </label>
+            }
+          </div>
+        </div>
+
         <div role="group" aria-labelledby="ml-lbl-notes">
           <span id="ml-lbl-notes" class="qz-field-lbl">Note values</span>
           <p class="qz-field-hint">Pick which note lengths the engine may use. Engine biases longer values onto downbeats.</p>
@@ -208,6 +220,7 @@
           [playedCount]="playedCount()"
           [tonic]="c.tonic"
           [mode]="c.mode"
+          [timeSignature]="ph.timeSignature"
           [width]="staffWidth()" />
       }
     </div>
@@ -226,6 +239,10 @@
         <div class="qz-stat-value">{{ playedCount() }} / {{ phrase()?.noteMidis?.length ?? 0 }}</div>
       </div>
     </div>
+
+    <div class="mel-run-footer">
+      <button (click)="next()" aria-label="Skip to next phrase">Next</button>
+    </div>
   </div>
 }
 
@@ -236,6 +253,12 @@
       <p class="qz-done-score" aria-label="{{ score() }} phrases completed">
         {{ score() }}<span class="qz-done-denom"> phrases</span>
       </p>
+    } @else if (!micUsed()) {
+      <p class="qz-done-eyebrow">Session complete</p>
+      <p class="qz-done-score" aria-label="{{ c.iterations }} phrases reviewed">
+        {{ c.iterations }}<span class="qz-done-denom"> phrases</span>
+      </p>
+      <p class="qz-done-sub">Reviewed without the mic. Start the mic to score your playing.</p>
     } @else {
       <p class="qz-done-eyebrow">Session complete</p>
       <p class="qz-done-score" aria-label="{{ score() }} of {{ c.iterations }} phrases">

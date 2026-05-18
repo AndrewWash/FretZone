@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, effect, input, viewChild } from '@angular/core';
 import { BaseLetter } from '../core/theory/note';
 import { ModeName } from '../core/theory/modes';
-import type { MelodyTickable } from '../core/melody/models';
+import type { MelodyTickable, TimeSignature } from '../core/melody/models';
 import { renderMelodyEl } from './vexflow-render';
 
 @Component({
@@ -15,6 +15,7 @@ export class MelodyStaffComponent {
   tonic = input<BaseLetter>('C');
   mode = input<ModeName>('Ionian');
   width = input(720);
+  timeSignature = input<TimeSignature>('4/4');
 
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
 
@@ -24,6 +25,7 @@ export class MelodyStaffComponent {
         width: this.width(),
         tonic: this.tonic(),
         mode: this.mode(),
+        timeSignature: this.timeSignature(),
       });
     });
   }
