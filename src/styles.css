@@ -243,6 +243,31 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
   padding: 2rem 0 3rem;
 }
 
+.app-header-lead {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.app-footer-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--fz-radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--fz-t3);
+  background: transparent;
+  border: 1px solid transparent;
+  text-decoration: none;
+  transition: color 120ms ease-out, background 120ms ease-out, border-color 120ms ease-out;
+}
+.app-footer-link:hover {
+  color: var(--fz-accent-text);
+  background: var(--fz-accent-bg);
+  border-color: oklch(0.62 0.24 285 / 0.30);
+  text-decoration: none;
+}
+
 /* ══════════════════════════════════════════════
    QUIZ — shared sr-only helper
 ══════════════════════════════════════════════ */
