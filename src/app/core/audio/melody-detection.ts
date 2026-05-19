@@ -5,6 +5,11 @@ export interface MelodyDetectConfig {
   midis: number[];          // sounding MIDIs in order
   a4: number;
   centsTolerance: number;
+  // When true, the first note is NOT armed at start. A tone left ringing from
+  // a previous iteration cannot be counted as the first note — the re-arm gate
+  // must open first (the pitch leaves the first note's band, or a fresh RMS
+  // attack appears). Use for every iteration after the first.
+  requireFreshAttack?: boolean;
 }
 
 export interface MelodyDetectCallbacks {
@@ -13,7 +18,7 @@ export interface MelodyDetectCallbacks {
   onComplete?: () => void;
 }
 
-const HOLD_COMMIT_MS = 200;
+const HOLD_COMMIT_MS = 90;
 const STABILITY_CENTS = 40;
 const POST_NOTE_IGNORE_MS = 60;
 
@@ -40,12 +45,16 @@ export function startMelodyDetection(
   let lastAcceptedAt = Date.now();
   let completed = false;
 
-  // Re-arm state
-  let armed = true;                       // first note can fire immediately
-  let acceptedTargetHz: number | null = null;
-  const rmsHistory: number[] = [];
-
   const targets = cfg.midis.map(m => midiToFreq(m, cfg.a4));
+
+  // Re-arm state. With requireFreshAttack the first note starts un-armed and
+  // the first target is seeded as the "just-accepted" note, so a leftover
+  // ringing tone is held off by the same gate that separates repeated notes.
+  let armed = !cfg.requireFreshAttack;
+  let acceptedTargetHz: number | null = cfg.requireFreshAttack
+    ? targets[0] ?? null
+    : null;
+  const rmsHistory: number[] = [];
 
   const withinTol = (hz: number, target: number) => {
     const cents = 1200 * Math.log2(hz / target);
@@ -78,10 +87,15 @@ export function startMelodyDetection(
 
     if (!armed) {
       // Path A: pitch moved off the just-accepted note → next note is coming.
-      if (acceptedTargetHz != null && hz > 0 && !withinTol(hz, acceptedTargetHz)) {
+      // Suppressed for the very first note under requireFreshAttack: there the
+      // gating note IS the first target, so a spurious decay-time pitch reading
+      // would arm the gate and let a tone left ringing from the previous
+      // iteration commit. Only a real re-attack (Path B) may start that note.
+      const allowPathA = !(cfg.requireFreshAttack && idx === 0);
+      if (allowPathA && acceptedTargetHz != null && hz > 0 && !withinTol(hz, acceptedTargetHz)) {
         armed = true;
       }
-      // Path B: amplitude evidence of a fresh strike on the same pitch.
+      // Path B: amplitude evidence of a fresh strike.
       else if (rmsHistory.length >= MIN_HISTORY_FRAMES) {
         const lm = localMinRms();
         if (rms > RMS_FLOOR && rms > lm * RE_ATTACK_RATIO) {

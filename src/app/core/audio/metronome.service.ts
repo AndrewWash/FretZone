@@ -154,6 +154,20 @@ export class MetronomeService {
     const ctx = this.ctx;
     if (!ctx) return;
     const secPerBeat = 60 / this.bpm();
+
+    // If the main thread was blocked long enough that beat times slipped into
+    // the past (e.g. a heavy note-detection render froze the setInterval
+    // scheduler), fast-forward past the fully-missed beats. This plays a
+    // single catch-up click instead of a burst, and keeps beatCounter aligned
+    // to the bar so downbeats stay on the original grid.
+    if (this.nextBeatTime < ctx.currentTime) {
+      const skip = Math.floor((ctx.currentTime - this.nextBeatTime) / secPerBeat);
+      if (skip > 0) {
+        this.beatCounter += skip;
+        this.nextBeatTime += skip * secPerBeat;
+      }
+    }
+
     while (this.nextBeatTime < ctx.currentTime + LOOKAHEAD_SEC) {
       const pattern = PATTERNS[this.timeSig()];
       const idxInBar = this.beatCounter % pattern.length;
@@ -169,6 +183,11 @@ export class MetronomeService {
     const out = this.masterGain;
     if (!ctx || !out) return;
 
+    // Guard against a `when` that has slipped into the past (main-thread jank).
+    // An envelope scheduled entirely in the past has already elapsed, so the
+    // click would play silently — clamp to "now" so it stays audible.
+    const startAt = Math.max(when, ctx.currentTime);
+
     const buffer = kind === 'down' ? this.customDownbeat : this.customUpbeat;
     if (buffer) {
       const src = ctx.createBufferSource();
@@ -176,7 +195,7 @@ export class MetronomeService {
       const g = ctx.createGain();
       g.gain.value = kind === 'down' ? 1 : UPBEAT_GAIN_RATIO;
       src.connect(g).connect(out);
-      src.start(when);
+      src.start(startAt);
     } else {
       const osc = ctx.createOscillator();
       osc.type = 'sine';
@@ -188,16 +207,16 @@ export class MetronomeService {
 
       const env = ctx.createGain();
       const peak = kind === 'down' ? 1 : UPBEAT_GAIN_RATIO;
-      env.gain.setValueAtTime(0.0001, when);
-      env.gain.exponentialRampToValueAtTime(peak, when + ATTACK_SEC);
-      env.gain.exponentialRampToValueAtTime(0.0001, when + ATTACK_SEC + DECAY_SEC);
+      env.gain.setValueAtTime(0.0001, startAt);
+      env.gain.exponentialRampToValueAtTime(peak, startAt + ATTACK_SEC);
+      env.gain.exponentialRampToValueAtTime(0.0001, startAt + ATTACK_SEC + DECAY_SEC);
 
       osc.connect(filter).connect(env).connect(out);
-      osc.start(when);
-      osc.stop(when + ATTACK_SEC + DECAY_SEC + 0.02);
+      osc.start(startAt);
+      osc.stop(startAt + ATTACK_SEC + DECAY_SEC + 0.02);
     }
 
-    const delayMs = Math.max(0, (when - ctx.currentTime) * 1000);
+    const delayMs = Math.max(0, (startAt - ctx.currentTime) * 1000);
     setTimeout(() => {
       this.beatIdx.set(idxInBar);
     }, delayMs);
