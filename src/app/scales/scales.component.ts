@@ -237,14 +237,28 @@ export class ScalesComponent implements OnDestroy {
     this.phase.set('setup');
   }
 
-  private spinUpDetection() {
+  // Restart the current scale run from its first note without leaving the run.
+  protected restart() {
+    if (this.phase() !== 'running') return;
+    this.playedCount.set(0);
+    this.heard.set('--');
+    if (this.micStarted()) {
+      this.tearDownDetection();
+      this.status.set('Restarted — play the first note.');
+      setTimeout(() => this.spinUpDetection(true), 0);
+    } else {
+      this.status.set('Restarted. Press Start Mic, then play the first note.');
+    }
+  }
+
+  private spinUpDetection(requireFreshAttack = false) {
     const c = this.cfg();
     const r = this.run();
     if (!c || !r) return;
     this.tearDownDetection();
     this.det = startMelodyDetection(
       this.service,
-      { midis: r.midis, a4: c.a4, centsTolerance: c.centsTolerance },
+      { midis: r.midis, a4: c.a4, centsTolerance: c.centsTolerance, requireFreshAttack },
       {
         onHeard: hz => {
           const m = Math.round(69 + 12 * Math.log2(hz / c.a4));
@@ -267,7 +281,7 @@ export class ScalesComponent implements OnDestroy {
           this.playedCount.set(0);
           this.status.set(`Iteration ${this.iterationIdx()} — keep going.`);
           this.tearDownDetection();
-          setTimeout(() => this.spinUpDetection(), 0);
+          setTimeout(() => this.spinUpDetection(true), 0);
         },
       },
     );

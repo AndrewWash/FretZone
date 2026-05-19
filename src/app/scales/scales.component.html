@@ -86,6 +86,7 @@
           <span class="qz-timer-pip" role="status" aria-live="polite">Timer started</span>
         }
         <button class="secondary" (click)="stopAndReset()">Stop</button>
+        <button class="secondary" (click)="restart()" aria-label="Restart this scale from the first note">Reset</button>
         <button (click)="startMic()" [disabled]="micStarted()">Start Mic</button>
       </div>
     </div>

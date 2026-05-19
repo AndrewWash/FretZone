@@ -277,14 +277,28 @@ export class MelodyComponent implements OnDestroy {
     this.phase.set('setup');
   }
 
-  private spinUpDetection() {
+  // Restart the current phrase from its first note without leaving the run.
+  protected restart() {
+    if (this.phase() !== 'running') return;
+    this.playedCount.set(0);
+    this.heard.set('--');
+    if (this.micStarted()) {
+      this.tearDownDetection();
+      this.status.set('Restarted — play the first note.');
+      setTimeout(() => this.spinUpDetection(true), 0);
+    } else {
+      this.status.set('Restarted. Press Start Mic, then play the first note.');
+    }
+  }
+
+  private spinUpDetection(requireFreshAttack = false) {
     const c = this.cfg();
     const ph = this.phrase();
     if (!c || !ph) return;
     this.tearDownDetection();
     this.det = startMelodyDetection(
       this.service,
-      { midis: ph.noteMidis, a4: c.a4, centsTolerance: c.centsTolerance },
+      { midis: ph.noteMidis, a4: c.a4, centsTolerance: c.centsTolerance, requireFreshAttack },
       {
         onHeard: hz => {
           const m = Math.round(69 + 12 * Math.log2(hz / c.a4));
@@ -325,7 +339,7 @@ export class MelodyComponent implements OnDestroy {
     this.idx.update(v => v + 1);
     if (this.micStarted()) {
       this.status.set('Next phrase. Play the first note.');
-      setTimeout(() => this.spinUpDetection(), 0);
+      setTimeout(() => this.spinUpDetection(true), 0);
     } else {
       this.status.set('Next phrase.');
     }
