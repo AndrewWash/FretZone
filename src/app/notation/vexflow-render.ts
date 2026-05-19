@@ -3,6 +3,7 @@ import { spellMidi, AccidentalMode, BaseLetter } from '../core/theory/note';
 import { keyAwareSpelling, keySignatureSpec, tonicPc, ModeName } from '../core/theory/modes';
 import type { MelodyTickable, TimeSignature } from '../core/melody/models';
 import { BEATS_PER_BAR } from '../core/melody/models';
+import { rhFingerLabel, type RhFingeringPattern } from '../core/scales/models';
 
 export type NotationTheme = 'light' | 'dark';
 
@@ -350,6 +351,7 @@ export interface ScaleRenderOptions {
   // on a single line.
   rowBreaks?: number[];
   isMelodicMinor?: boolean;
+  rhFingeringPattern?: RhFingeringPattern;
   theme?: NotationTheme;
 }
 
@@ -365,6 +367,7 @@ export function renderScaleEl(
   const mode: ModeName = opts.mode ?? 'Ionian';
   const showTab = !!opts.showTab;
   const showFingerings = !!opts.showFingerings;
+  const rhPattern: RhFingeringPattern = opts.rhFingeringPattern ?? 'off';
   const { FG, BG, DIM } = themeColors(opts.theme);
   const DIM_STYLE = { fillStyle: DIM, strokeStyle: DIM };
   const keySpec = keySignatureSpec(tonic, mode, tonicOffset);
@@ -385,7 +388,9 @@ export function renderScaleEl(
   if (cursor < notes.length) ranges.push([cursor, notes.length]);
   if (!ranges.length) ranges.push([0, notes.length]);
 
-  const topPad = 30;
+  // Extra headroom when RH fingerings are on so a TOP-justified annotation
+  // above high ledger-line notes isn't clipped at the SVG top edge.
+  const topPad = 30 + (rhPattern !== 'off' ? 14 : 0);
   // 72 + 8 gives a 40 px gap from the bottom treble line to the tab top.
   // Pattern #3's lowest note (G3 written) with fingering needs ~50 px, so
   // expect ~10 px of glyph overlap on that one extreme note; all other
@@ -437,7 +442,7 @@ export function renderScaleEl(
     const rowNotes = notes.slice(start, end);
 
     // Notation voice — each scale tone as a quarter note.
-    const staveNotes = rowNotes.map(n => {
+    const staveNotes = rowNotes.map((n, i) => {
       const written = n.midi + 12; // sounding → written (treble guitar is octave-up notation)
       const sp = keyAwareSpelling(written, tonic, mode, tonicOffset);
       const sn = new Flow.StaveNote({ keys: [sp.key], duration: 'q', clef: 'treble' });
@@ -451,6 +456,18 @@ export function renderScaleEl(
           if (pos != null) fhf.setPosition(pos);
         } catch {}
         sn.addModifier(fhf, 0);
+      }
+      // Right-hand fingering — a letter (i/m) placed ABOVE the note, opposite
+      // the LH badge below. `start + i` is the note's index in the continuous
+      // full run, so alternation carries across row breaks and the turnaround.
+      const rh = rhFingerLabel(start + i, rhPattern);
+      if (rh) {
+        const ann = new Flow.Annotation(rh);
+        try {
+          const top = (Flow as any).Annotation?.VerticalJustify?.TOP;
+          if (top != null) ann.setVerticalJustification(top);
+        } catch {}
+        sn.addModifier(ann, 0);
       }
       return sn;
     });

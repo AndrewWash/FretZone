@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, effect, inject, input, viewChild } from '@angular/core';
 import type { BaseLetter } from '../core/theory/note';
 import type { ModeName } from '../core/theory/modes';
+import type { RhFingeringPattern } from '../core/scales/models';
 import { ThemeService } from '../core/theme/theme.service';
 import { renderScaleEl, type ScaleRenderNote } from './vexflow-render';
 
@@ -18,6 +19,7 @@ export class ScaleStaffComponent {
   width = input(960);
   showTab = input<boolean>(false);
   showFingerings = input<boolean>(false);
+  rhFingeringPattern = input<RhFingeringPattern>('off');
   rowBreaks = input<number[]>([]);
   isMelodicMinor = input<boolean>(false);
 
@@ -33,6 +35,7 @@ export class ScaleStaffComponent {
         mode: this.mode(),
         showTab: this.showTab(),
         showFingerings: this.showFingerings(),
+        rhFingeringPattern: this.rhFingeringPattern(),
         rowBreaks: this.rowBreaks(),
         isMelodicMinor: this.isMelodicMinor(),
         theme: this.theme.notationTheme(),

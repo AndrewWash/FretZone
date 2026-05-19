@@ -55,6 +55,7 @@ export function defaultScalesConfig(): ScalesConfig {
     scaleId: 'c-major',
     showTab: false,
     showFingerings: false,
+    rhFingeringPattern: 'off',
     iterations: 1,
     limitMode: 'iterations',
     timeMinutes: 3,

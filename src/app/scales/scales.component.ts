@@ -18,7 +18,9 @@ import {
 import {
   qualityToMode,
   tonicBaseLetter,
+  RH_FINGERING_OPTIONS,
   type LimitMode,
+  type RhFingeringPattern,
   type ScaleQuality,
   type ScalesConfig,
 } from '../core/scales/models';
@@ -45,6 +47,7 @@ export class ScalesComponent implements OnDestroy {
   protected theme = inject(ThemeService);
 
   protected patternGroups = scalesGroupedByPattern();
+  protected rhFingeringOptions = RH_FINGERING_OPTIONS;
 
   protected form;
 
@@ -153,6 +156,7 @@ export class ScalesComponent implements OnDestroy {
       scaleId: this.fb.nonNullable.control(safeId),
       showTab: this.fb.nonNullable.control(initial.showTab),
       showFingerings: this.fb.nonNullable.control(initial.showFingerings),
+      rhFingeringPattern: this.fb.nonNullable.control<RhFingeringPattern>(initial.rhFingeringPattern),
       iterations: this.fb.nonNullable.control(initial.iterations),
       limitMode: this.fb.nonNullable.control<LimitMode>(initial.limitMode),
       timeMinutes: this.fb.nonNullable.control(initial.timeMinutes),
@@ -312,6 +316,9 @@ export class ScalesComponent implements OnDestroy {
       scaleId: v.scaleId || 'c-major',
       showTab: !!v.showTab,
       showFingerings: !!v.showFingerings,
+      rhFingeringPattern: RH_FINGERING_OPTIONS.some(o => o.value === v.rhFingeringPattern)
+        ? v.rhFingeringPattern
+        : 'off',
       iterations: Math.max(1, v.iterations || 1),
       limitMode: v.limitMode === 'time' ? 'time' : 'iterations',
       timeMinutes: Math.min(60, Math.max(1, v.timeMinutes || 3)),

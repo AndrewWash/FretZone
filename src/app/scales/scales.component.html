@@ -41,6 +41,16 @@
             Dark mode notation
           </label>
         </div>
+        <div>
+          <span id="sc-lbl-rh" class="qz-field-lbl">RH fingering</span>
+          <p class="qz-field-hint">Right-hand pattern shown above the staff.</p>
+          <select formControlName="rhFingeringPattern" class="sc-scale-select"
+                  aria-labelledby="sc-lbl-rh">
+            @for (o of rhFingeringOptions; track o.value) {
+              <option [value]="o.value">{{ o.label }}</option>
+            }
+          </select>
+        </div>
         <div role="group" aria-labelledby="sc-lbl-limit">
           <span id="sc-lbl-limit" class="qz-field-lbl">Limit by</span>
           <label class="qz-opt-row">
@@ -103,6 +113,7 @@
           [mode]="staffMode()"
           [showTab]="c.showTab"
           [showFingerings]="c.showFingerings"
+          [rhFingeringPattern]="c.rhFingeringPattern"
           [rowBreaks]="staffRowBreaks()"
           [isMelodicMinor]="staffIsMelodicMinor()"
           [width]="960" />
