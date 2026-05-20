@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { PitchDetectService } from '../core/audio/pitch-detect.service';
@@ -9,6 +9,7 @@ import { enharmonicDisplay } from '../core/theory/note';
 import {
   defaultSorConfig,
   type LimitMode,
+  type MeasureRange,
   type PracticeMode,
   type SorConfig,
   type SorEtude,
@@ -21,6 +22,7 @@ import {
 import {
   createMetronomeCursor,
   flattenUpperVoice,
+  sliceEtudeByRanges,
   upperNoteCount,
   type MetronomeCursor,
 } from '../core/sor/engine';
@@ -58,6 +60,13 @@ export class SorComponent implements OnDestroy {
   protected limitModeSig = signal<LimitMode>('iterations');
   protected practiceModeSig = signal<PracticeMode>('metronome');
   protected iterationReady = signal(false);
+  protected measureRanges = signal<MeasureRange[]>([]);
+  protected etudeIdSig = signal<string>('sor-op60-no1');
+  protected rangeStartSig = signal<number | null>(null);
+  protected rangeEndSig = signal<number | null>(null);
+  // Layout hints for the staff renderer; populated on Start from sliceEtudeByRanges.
+  protected barLabels = signal<number[] | null>(null);
+  protected sectionBreaks = signal<boolean[] | null>(null);
 
   private sessionTimeoutId: any = null;
   private det: { start: () => Promise<void>; stop: () => void } | null = null;
@@ -72,6 +81,26 @@ export class SorComponent implements OnDestroy {
   protected totalNotes = computed(() => {
     const e = this.etude();
     return e ? upperNoteCount(e) : 0;
+  });
+
+  // Bar count for the currently picked etude in the setup form. Drives the
+  // start/end input bounds and the "Selected N of M bars" hint.
+  protected setupBarCount = computed(() => {
+    const e = getEtudeById(this.etudeIdSig());
+    return e?.bars.length ?? 0;
+  });
+
+  protected selectedBarsCount = computed(() => {
+    const total = this.setupBarCount();
+    if (!total) return 0;
+    const seen = new Set<number>();
+    for (const r of this.measureRanges()) {
+      const start = Math.max(1, Math.min(total, r.start | 0));
+      const end = Math.max(1, Math.min(total, r.end | 0));
+      if (start > end) continue;
+      for (let m = start; m <= end; m++) seen.add(m);
+    }
+    return seen.size;
   });
 
   constructor() {
@@ -90,10 +119,15 @@ export class SorComponent implements OnDestroy {
       timeMinutes: this.fb.nonNullable.control(initial.timeMinutes),
       a4: this.fb.nonNullable.control(initial.a4),
       centsTolerance: this.fb.nonNullable.control(initial.centsTolerance),
+      rangeStart: this.fb.control<number | null>(null),
+      rangeEnd: this.fb.control<number | null>(null),
     });
 
     this.limitModeSig.set(this.form.controls.limitMode.value);
     this.practiceModeSig.set(this.form.controls.practiceMode.value);
+    this.etudeIdSig.set(this.form.controls.etudeId.value);
+    const initialRanges = Array.isArray(initial.measureRanges) ? initial.measureRanges : [];
+    this.measureRanges.set(this.normalizeRanges(initialRanges, getEtudeById(safeId)?.bars.length ?? 0));
 
     this.form.controls.limitMode.valueChanges
       .pipe(takeUntilDestroyed())
@@ -101,10 +135,81 @@ export class SorComponent implements OnDestroy {
     this.form.controls.practiceMode.valueChanges
       .pipe(takeUntilDestroyed())
       .subscribe(v => this.practiceModeSig.set(v));
+    this.form.controls.etudeId.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(v => {
+        this.etudeIdSig.set(v);
+        // Drop ranges so a stale selection from a different-length etude
+        // can't trigger out-of-range silence on the next Start.
+        this.measureRanges.set([]);
+        this.form.controls.rangeStart.setValue(null);
+        this.form.controls.rangeEnd.setValue(null);
+      });
+    this.form.controls.rangeStart.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(v => this.rangeStartSig.set(v));
+    this.form.controls.rangeEnd.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(v => this.rangeEndSig.set(v));
 
     this.form.valueChanges
       .pipe(takeUntilDestroyed())
       .subscribe(() => saveToStorage(STORAGE_KEY, this.formToConfig()));
+
+    // Persist whenever the measure-range list changes (it's outside the form).
+    effect(() => {
+      this.measureRanges();
+      saveToStorage(STORAGE_KEY, this.formToConfig());
+    });
+  }
+
+  private normalizeRanges(ranges: MeasureRange[], total: number): MeasureRange[] {
+    if (!total) return [];
+    const out: MeasureRange[] = [];
+    for (const r of ranges) {
+      const start = Math.max(1, Math.min(total, r.start | 0));
+      const end = Math.max(1, Math.min(total, r.end | 0));
+      if (start > end) continue;
+      out.push({ start, end });
+    }
+    return out;
+  }
+
+  protected canAddRange = computed(() => {
+    const s = this.rangeStartSig();
+    const e = this.rangeEndSig();
+    const total = this.setupBarCount();
+    if (!total) return false;
+    if (s == null || e == null) return false;
+    if (!Number.isFinite(s) || !Number.isFinite(e)) return false;
+    if (s < 1 || e < 1) return false;
+    if (s > total || e > total) return false;
+    return s <= e;
+  });
+
+  protected addRange() {
+    const s = this.form.controls.rangeStart.value;
+    const e = this.form.controls.rangeEnd.value;
+    const total = this.setupBarCount();
+    if (s == null || e == null || !total) return;
+    const start = Math.max(1, Math.min(total, Math.trunc(s)));
+    const end = Math.max(1, Math.min(total, Math.trunc(e)));
+    if (start > end) return;
+    this.measureRanges.update(arr => [...arr, { start, end }]);
+    this.form.controls.rangeStart.setValue(null);
+    this.form.controls.rangeEnd.setValue(null);
+  }
+
+  protected removeRange(index: number) {
+    this.measureRanges.update(arr => arr.filter((_, i) => i !== index));
+  }
+
+  protected clearRanges() {
+    this.measureRanges.set([]);
+  }
+
+  protected rangeLabel(r: MeasureRange): string {
+    return r.start === r.end ? `${r.start}` : `${r.start}–${r.end}`;
   }
 
   ngOnDestroy(): void {
@@ -123,8 +228,15 @@ export class SorComponent implements OnDestroy {
       this.status.set('That etude has no notes yet — import it via MusicXML first.');
       return;
     }
+    const sliced = sliceEtudeByRanges(entry, c.measureRanges);
+    if (!sliced.etude.bars.length) {
+      this.status.set('No measures selected — pick a range or clear the list.');
+      return;
+    }
     this.cfg.set(c);
-    this.etude.set(entry);
+    this.etude.set(sliced.etude);
+    this.barLabels.set(sliced.originalBarNumbers);
+    this.sectionBreaks.set(sliced.sectionBreakBefore);
     this.playedCount.set(0);
     this.iterationIdx.set(1);
     this.heard.set('--');
@@ -336,6 +448,7 @@ export class SorComponent implements OnDestroy {
       timeMinutes: Math.min(60, Math.max(1, v.timeMinutes || 3)),
       a4: v.a4 || 440,
       centsTolerance: Math.min(50, Math.max(5, v.centsTolerance || 25)),
+      measureRanges: this.measureRanges(),
     };
   }
 

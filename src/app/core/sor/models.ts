@@ -84,6 +84,12 @@ export interface SorEtude {
 export type PracticeMode = 'mic' | 'metronome';
 export type LimitMode = 'iterations' | 'time';
 
+// Inclusive, 1-indexed measure range. `start === end` for a single-bar range.
+export interface MeasureRange {
+  start: number;
+  end: number;
+}
+
 export interface SorConfig {
   etudeId: string;
   practiceMode: PracticeMode;
@@ -95,6 +101,9 @@ export interface SorConfig {
   timeMinutes: number;
   a4: number;
   centsTolerance: number;
+  // Empty array means "play the whole etude" — preserves the original behavior
+  // for users who never touch the selection UI.
+  measureRanges: MeasureRange[];
 }
 
 export function defaultSorConfig(): SorConfig {
@@ -109,6 +118,7 @@ export function defaultSorConfig(): SorConfig {
     timeMinutes: 3,
     a4: 440,
     centsTolerance: 25,
+    measureRanges: [],
   };
 }
 

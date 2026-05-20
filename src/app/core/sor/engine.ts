@@ -1,4 +1,4 @@
-import type { EtudeNote, SorEtude } from './models';
+import type { EtudeNote, MeasureRange, SorEtude } from './models';
 import { ETUDE_BEATS_PER_BAR, noteBeats } from './models';
 import { createBeatCursor, type BeatCursor } from '../audio/beat-cursor';
 
@@ -111,4 +111,71 @@ function findFirstInNextBar(etude: SorEtude, barIdx: number, voice: 'upper' | 'l
     if (arr.length) return arr[0];
   }
   return null;
+}
+
+// ── Measure-range slicing ────────────────────────────────────────────────────
+// Produces a derived etude containing only the user-selected bars, in the
+// order the user added their ranges (dedup preserves first-occurrence). The
+// parallel `originalBarNumbers` and `sectionBreakBefore` arrays carry the
+// layout hints the renderer needs to label bars and force a row break between
+// non-adjacent runs (e.g., bars 3-4 + 9).
+
+export interface SlicedEtude {
+  etude: SorEtude;
+  originalBarNumbers: number[];      // 1-indexed; length === etude.bars.length
+  sectionBreakBefore: boolean[];     // length === etude.bars.length; true at the first bar of each new contiguous section after the first
+}
+
+export function sliceEtudeByRanges(source: SorEtude, ranges: MeasureRange[]): SlicedEtude {
+  const total = source.bars.length;
+  if (!ranges.length || total === 0) {
+    return {
+      etude: source,
+      originalBarNumbers: source.bars.map((_, i) => i + 1),
+      sectionBreakBefore: source.bars.map(() => false),
+    };
+  }
+
+  const picked: number[] = [];
+  const seen = new Set<number>();
+  for (const r of ranges) {
+    // Drop ranges wholly outside the piece — clamping {17,20} down to {16,16}
+    // would silently change "out-of-bounds" into "play the last bar."
+    if (r.start > total || r.end < 1) continue;
+    const start = Math.max(1, Math.min(total, r.start | 0));
+    const end = Math.max(1, Math.min(total, r.end | 0));
+    if (start > end) continue;
+    for (let m = start; m <= end; m++) {
+      if (seen.has(m)) continue;
+      seen.add(m);
+      picked.push(m);
+    }
+  }
+
+  if (!picked.length) {
+    return {
+      etude: source,
+      originalBarNumbers: source.bars.map((_, i) => i + 1),
+      sectionBreakBefore: source.bars.map(() => false),
+    };
+  }
+
+  // No-op slice: every bar selected, in original order — equivalent to full piece.
+  const isFullPiece = picked.length === total && picked.every((m, i) => m === i + 1);
+  if (isFullPiece) {
+    return {
+      etude: source,
+      originalBarNumbers: source.bars.map((_, i) => i + 1),
+      sectionBreakBefore: source.bars.map(() => false),
+    };
+  }
+
+  const bars = picked.map(m => source.bars[m - 1]);
+  const sectionBreakBefore = picked.map((m, i) => i > 0 && m !== picked[i - 1] + 1);
+
+  return {
+    etude: { ...source, bars },
+    originalBarNumbers: picked,
+    sectionBreakBefore,
+  };
 }

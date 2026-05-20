@@ -644,6 +644,12 @@ export interface EtudeRenderOptions {
   theme?: NotationTheme;
   // Max bars per row before wrapping. Default 4.
   barsPerRow?: number;
+  // Original 1-indexed measure number for each rendered bar (length === bars.length).
+  // When omitted, falls back to (bars index + 1).
+  barLabels?: number[] | null;
+  // When true at index i, force a row break BEFORE bar i so a non-adjacent
+  // section starts on its own line with a fresh clef/key/time lead-in.
+  sectionBreaks?: boolean[] | null;
 }
 
 interface BuiltEtudeNote {
@@ -674,6 +680,30 @@ function vfDuration(n: EtudeNote): string {
   const dotted = n.dotted ? 'd' : '';
   const rest = n.kind === 'rest' ? 'r' : '';
   return `${base}${dotted}${rest}`;
+}
+
+// Partition bar indices [0..barCount-1] into rows. A row breaks when it hits
+// `barsPerRow`, OR when `sectionBreaks[i]` is true at the next bar — the
+// latter keeps non-adjacent measure selections from rendering on one line.
+// Exported for unit testing — the slice flow (e.g., 2-4 + 8) hinges on this.
+export function buildEtudeRows(
+  barCount: number,
+  barsPerRow: number,
+  sectionBreaks: boolean[] | null | undefined,
+): number[][] {
+  const rows: number[][] = [];
+  const perRow = Math.max(1, barsPerRow);
+  let i = 0;
+  while (i < barCount) {
+    const row: number[] = [i];
+    i++;
+    while (i < barCount && row.length < perRow && !(sectionBreaks && sectionBreaks[i])) {
+      row.push(i);
+      i++;
+    }
+    rows.push(row);
+  }
+  return rows;
 }
 
 export function renderEtudeEl(
@@ -713,10 +743,13 @@ export function renderEtudeEl(
   }
 
   // ── Layout math ──────────────────────────────────────────────────────────
-  const rows: EtudeBar[][] = [];
-  for (let i = 0; i < bars.length; i += barsPerRow) {
-    rows.push(bars.slice(i, i + barsPerRow));
-  }
+  // Rows hold bar INDICES (into `bars`) so each row knows which original
+  // measure each slot maps to. A row break is forced either by hitting
+  // `barsPerRow` or by `sectionBreaks[i] === true` — the latter keeps
+  // non-adjacent measure selections from running together visually.
+  const sectionBreaks = opts.sectionBreaks ?? null;
+  const barLabels = opts.barLabels ?? null;
+  const rows = buildEtudeRows(bars.length, barsPerRow, sectionBreaks);
 
   // Per-row vertical block: treble (72) + optional tab (110 + 8 gap)
   const trebleHeight = 72;
@@ -859,15 +892,15 @@ export function renderEtudeEl(
   const totalAvailable = requestedWidth - 20;
 
   // ── Render bars row by row ───────────────────────────────────────────────
-  let barCursor = 0;
-  rows.forEach((rowBars, rowIdx) => {
+  rows.forEach((rowIdxs, rowIdx) => {
     const yTop = topPad + rowIdx * (rowHeight + rowGap);
-    const noteArea = (totalAvailable - leadWidth) / rowBars.length;
+    const noteArea = (totalAvailable - leadWidth) / rowIdxs.length;
 
     let xCursor = 10;
-    rowBars.forEach((bar, i) => {
+    rowIdxs.forEach((barIdx, i) => {
+      const bar = bars[barIdx];
       const staveWidth = i === 0 ? noteArea + leadWidth : noteArea;
-      const b = built[barCursor + i];
+      const b = built[barIdx];
 
       // Treble stave.
       const stave = new Flow.Stave(xCursor, yTop, staveWidth);
@@ -877,6 +910,17 @@ export function renderEtudeEl(
       applyRepeatBarlines(stave, bar);
       styleStave(stave, FG);
       stave.setContext(ctx).draw();
+
+      // Bar number label above the stave (original measure number when the
+      // staff is rendering a slice; otherwise its position in the etude).
+      const label = barLabels?.[barIdx] ?? (barIdx + 1);
+      try {
+        ctx.save();
+        ctx.setFont('Arial', 9, '');
+        try { (ctx as any).setFillStyle?.(FG); } catch {}
+        ctx.fillText(String(label), xCursor + (i === 0 ? leadWidth + 2 : 4), yTop - 6);
+        ctx.restore();
+      } catch {}
 
       // Tab stave.
       let tabStave: any = null;
@@ -940,8 +984,6 @@ export function renderEtudeEl(
 
       xCursor += staveWidth;
     });
-
-    barCursor += rowBars.length;
   });
 
   // Draw ties last so they sit on top of the staves and pick up any cross-bar

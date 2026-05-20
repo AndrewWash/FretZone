@@ -73,6 +73,53 @@
         </div>
       </div>
 
+      <div class="qz-config-col" role="group" aria-labelledby="sor-lbl-measures">
+        <div>
+          <span id="sor-lbl-measures" class="qz-field-lbl">Practice measures</span>
+          <p class="qz-field-hint">
+            @if (setupBarCount(); as total) {
+              @if (measureRanges().length) {
+                Selected {{ selectedBarsCount() }} of {{ total }} bars.
+              } @else {
+                Empty = play the whole etude ({{ total }} bars).
+              }
+            } @else {
+              No bars in this etude yet.
+            }
+          </p>
+          <div class="sor-range-inputs">
+            <label class="sor-range-field">
+              <span>From</span>
+              <input type="number" min="1" [max]="setupBarCount() || 1"
+                     formControlName="rangeStart" class="qz-num" aria-label="Range start" />
+            </label>
+            <label class="sor-range-field">
+              <span>To</span>
+              <input type="number" min="1" [max]="setupBarCount() || 1"
+                     formControlName="rangeEnd" class="qz-num" aria-label="Range end" />
+            </label>
+            <button type="button" class="secondary sor-range-add"
+                    [disabled]="!canAddRange()"
+                    (click)="addRange()">
+              + Add
+            </button>
+          </div>
+          @if (measureRanges().length) {
+            <div class="sor-range-chips" role="list" aria-label="Selected measure ranges">
+              @for (r of measureRanges(); track $index) {
+                <span class="sor-range-chip" role="listitem">
+                  <span class="sor-range-chip-text">{{ rangeLabel(r) }}</span>
+                  <button type="button" class="sor-range-chip-x"
+                          (click)="removeRange($index)"
+                          [attr.aria-label]="'Remove range ' + rangeLabel(r)">×</button>
+                </span>
+              }
+              <button type="button" class="sor-range-clear" (click)="clearRanges()">Clear</button>
+            </div>
+          }
+        </div>
+      </div>
+
       @if (practiceModeSig() === 'mic') {
         <div class="qz-config-col" role="group" aria-labelledby="sor-lbl-audio">
           <span id="sor-lbl-audio" class="qz-field-lbl">Audio</span>
@@ -123,6 +170,8 @@
           [showTab]="c.showTab"
           [showLhFingerings]="c.showLhFingerings"
           [showRhFingerings]="c.showRhFingerings"
+          [barLabels]="barLabels()"
+          [sectionBreaks]="sectionBreaks()"
           [width]="960" />
       }
     </div>

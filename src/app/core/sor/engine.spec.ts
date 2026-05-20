@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SOR_OP60_NO1 } from './catalog';
-import { flattenUpperVoice, totalBeats, upperNoteCount, validateTies } from './engine';
+import { flattenUpperVoice, sliceEtudeByRanges, totalBeats, upperNoteCount, validateTies } from './engine';
 import type { SorEtude } from './models';
 
 describe('sor/engine flattenUpperVoice', () => {
@@ -94,5 +94,100 @@ describe('sor/engine bar-length structure', () => {
     // Tonic C4 (MIDI 60) must be one of the chord pitches — losing it would
     // make the final cadence sound unresolved.
     expect(allMidis).toContain(60);
+  });
+});
+
+describe('sor/engine sliceEtudeByRanges', () => {
+  it('returns the original etude when no ranges are provided', () => {
+    const out = sliceEtudeByRanges(SOR_OP60_NO1, []);
+    expect(out.etude).toBe(SOR_OP60_NO1);
+    expect(out.originalBarNumbers).toEqual(
+      SOR_OP60_NO1.bars.map((_, i) => i + 1),
+    );
+    expect(out.sectionBreakBefore.every(b => b === false)).toBe(true);
+  });
+
+  it('returns the original etude when ranges cover the full piece', () => {
+    const total = SOR_OP60_NO1.bars.length;
+    const out = sliceEtudeByRanges(SOR_OP60_NO1, [{ start: 1, end: total }]);
+    expect(out.etude).toBe(SOR_OP60_NO1);
+    expect(out.sectionBreakBefore.every(b => b === false)).toBe(true);
+  });
+
+  it('keeps a single mid-piece range with no section breaks', () => {
+    const out = sliceEtudeByRanges(SOR_OP60_NO1, [{ start: 3, end: 5 }]);
+    expect(out.etude.bars.length).toBe(3);
+    expect(out.etude.bars[0]).toBe(SOR_OP60_NO1.bars[2]);
+    expect(out.etude.bars[1]).toBe(SOR_OP60_NO1.bars[3]);
+    expect(out.etude.bars[2]).toBe(SOR_OP60_NO1.bars[4]);
+    expect(out.originalBarNumbers).toEqual([3, 4, 5]);
+    expect(out.sectionBreakBefore).toEqual([false, false, false]);
+  });
+
+  it('flags a section break between non-adjacent ranges', () => {
+    const out = sliceEtudeByRanges(SOR_OP60_NO1, [
+      { start: 3, end: 4 },
+      { start: 9, end: 9 },
+    ]);
+    expect(out.etude.bars.length).toBe(3);
+    expect(out.originalBarNumbers).toEqual([3, 4, 9]);
+    expect(out.sectionBreakBefore).toEqual([false, false, true]);
+  });
+
+  it('preserves user-supplied range order (no sorting)', () => {
+    const out = sliceEtudeByRanges(SOR_OP60_NO1, [
+      { start: 9, end: 9 },
+      { start: 3, end: 4 },
+    ]);
+    expect(out.originalBarNumbers).toEqual([9, 3, 4]);
+    // 9 → 3 is a break (9 + 1 !== 3), 3 → 4 is contiguous.
+    expect(out.sectionBreakBefore).toEqual([false, true, false]);
+  });
+
+  it('dedupes overlapping ranges by first occurrence', () => {
+    const out = sliceEtudeByRanges(SOR_OP60_NO1, [
+      { start: 3, end: 5 },
+      { start: 4, end: 6 },
+    ]);
+    expect(out.originalBarNumbers).toEqual([3, 4, 5, 6]);
+    expect(out.sectionBreakBefore.every(b => b === false)).toBe(true);
+  });
+
+  it('clamps out-of-range ends down to the etude length', () => {
+    const total = SOR_OP60_NO1.bars.length;
+    const out = sliceEtudeByRanges(SOR_OP60_NO1, [{ start: total - 1, end: total + 50 }]);
+    expect(out.etude.bars.length).toBe(2);
+    expect(out.originalBarNumbers).toEqual([total - 1, total]);
+  });
+
+  it('drops a range whose start exceeds the piece length', () => {
+    const total = SOR_OP60_NO1.bars.length;
+    const out = sliceEtudeByRanges(SOR_OP60_NO1, [
+      { start: total + 5, end: total + 10 },
+      { start: 2, end: 2 },
+    ]);
+    expect(out.originalBarNumbers).toEqual([2]);
+  });
+
+  it('falls back to full piece when every range is invalid', () => {
+    const total = SOR_OP60_NO1.bars.length;
+    const out = sliceEtudeByRanges(SOR_OP60_NO1, [{ start: total + 1, end: total + 2 }]);
+    expect(out.etude).toBe(SOR_OP60_NO1);
+  });
+
+  it('sliced etude carries through key, time signature, and BPM hint', () => {
+    const out = sliceEtudeByRanges(SOR_OP60_NO1, [{ start: 2, end: 3 }]);
+    expect(out.etude.key).toBe(SOR_OP60_NO1.key);
+    expect(out.etude.timeSignature).toBe(SOR_OP60_NO1.timeSignature);
+    expect(out.etude.defaultBpm).toBe(SOR_OP60_NO1.defaultBpm);
+  });
+
+  it('totalBeats and upperNoteCount adapt to the slice', () => {
+    const out = sliceEtudeByRanges(SOR_OP60_NO1, [{ start: 1, end: 2 }]);
+    expect(totalBeats(out.etude)).toBe(2 * 4);
+    const directCount = SOR_OP60_NO1.bars
+      .slice(0, 2)
+      .reduce((s, b) => s + b.upper.filter(n => n.kind === 'note').length, 0);
+    expect(upperNoteCount(out.etude)).toBe(directCount);
   });
 });
