@@ -46,6 +46,17 @@ function styleStave(stave: any, fg: string) {
   } catch {}
 }
 
+// MusicXML <repeat direction="forward|backward"/> → VexFlow repeat barlines.
+// Applied before draw() so the stave allocates space for the thick bar + dots.
+function applyRepeatBarlines(stave: any, bar: EtudeBar) {
+  const T = (Flow as any).Barline?.type;
+  if (!T) return;
+  try {
+    if (bar.startRepeat) stave.setBegBarType(T.REPEAT_BEGIN);
+    if (bar.endRepeat) stave.setEndBarType(T.REPEAT_END);
+  } catch {}
+}
+
 // Notehead + stem + flag are covered by StaveNote.setStyle, but accidentals
 // and fret-hand-finger badges are modifiers that need their own style call.
 function styleNote(note: any, fg: string) {
@@ -854,7 +865,7 @@ export function renderEtudeEl(
     const noteArea = (totalAvailable - leadWidth) / rowBars.length;
 
     let xCursor = 10;
-    rowBars.forEach((_bar, i) => {
+    rowBars.forEach((bar, i) => {
       const staveWidth = i === 0 ? noteArea + leadWidth : noteArea;
       const b = built[barCursor + i];
 
@@ -863,6 +874,7 @@ export function renderEtudeEl(
       if (i === 0) {
         stave.addClef('treble').addKeySignature(keySpec).addTimeSignature(timeSignature);
       }
+      applyRepeatBarlines(stave, bar);
       styleStave(stave, FG);
       stave.setContext(ctx).draw();
 
@@ -871,6 +883,7 @@ export function renderEtudeEl(
       if (showTab) {
         tabStave = new Flow.TabStave(xCursor, yTop + trebleHeight + tabGap, staveWidth);
         tabStave.addClef('tab').setNumLines(6);
+        applyRepeatBarlines(tabStave, bar);
         styleStave(tabStave, FG);
         tabStave.setContext(ctx).draw();
         tabStave.setNoteStartX(stave.getNoteStartX());
@@ -957,10 +970,31 @@ function buildBuiltNote(
   if (src.kind === 'rest') {
     staveNote = new Flow.StaveNote({ keys: ['b/4'], duration: dur });
   } else {
-    const written = (src.midi ?? 60) + 12; // sounding → written (octave up)
-    const sp = keyAwareSpelling(written, tonic, mode, tonicOffset);
+    // Collect primary + chord pitches; sort ascending by midi so VexFlow draws
+    // the lowest at the bottom of the stack.
+    type Pitch = { midi: number; stringId?: number; fret?: number; lhFinger?: number | null };
+    const allPitches: Pitch[] = [
+      {
+        midi: src.midi ?? 60,
+        stringId: src.stringId,
+        fret: src.fret,
+        lhFinger: src.lhFinger ?? null,
+      },
+      ...(src.chord ?? []).map(p => ({
+        midi: p.midi,
+        stringId: p.stringId,
+        fret: p.fret,
+        lhFinger: p.lhFinger ?? null,
+      })),
+    ].sort((a, b) => a.midi - b.midi);
+
+    const keys = allPitches.map(p => {
+      const written = p.midi + 12; // sounding → written (octave up)
+      return keyAwareSpelling(written, tonic, mode, tonicOffset).key;
+    });
+
     staveNote = new Flow.StaveNote({
-      keys: [sp.key],
+      keys,
       duration: dur,
       clef: 'treble',
       stem_direction: stemDirection,
@@ -968,13 +1002,17 @@ function buildBuiltNote(
     if (src.dotted) {
       try { Flow.Dot.buildAndAttach([staveNote], { all: true }); } catch {}
     }
-    if (showLh && src.lhFinger != null && src.lhFinger >= 0) {
-      const fhf = new Flow.FretHandFinger(String(src.lhFinger));
-      try {
-        const pos = (Flow as any).Modifier?.Position?.BELOW;
-        if (pos != null) fhf.setPosition(pos);
-      } catch {}
-      staveNote.addModifier(fhf, 0);
+    if (showLh) {
+      allPitches.forEach((p, idx) => {
+        if (p.lhFinger != null && p.lhFinger >= 0) {
+          const fhf = new Flow.FretHandFinger(String(p.lhFinger));
+          try {
+            const pos = (Flow as any).Modifier?.Position?.BELOW;
+            if (pos != null) fhf.setPosition(pos);
+          } catch {}
+          staveNote.addModifier(fhf, idx);
+        }
+      });
     }
     if (showRh && src.rhFinger) {
       const ann = new Flow.Annotation(src.rhFinger);
@@ -989,10 +1027,13 @@ function buildBuiltNote(
 
   let tabNote: any | null = null;
   if (showTab && src.kind === 'note' && src.stringId != null && src.fret != null) {
-    tabNote = new Flow.TabNote({
-      positions: [{ str: src.stringId, fret: src.fret }],
-      duration: dur,
-    });
+    const positions = [
+      { str: src.stringId, fret: src.fret },
+      ...(src.chord ?? [])
+        .filter(p => p.stringId != null && p.fret != null)
+        .map(p => ({ str: p.stringId as number, fret: p.fret as number })),
+    ];
+    tabNote = new Flow.TabNote({ positions, duration: dur });
     if (src.dotted) {
       try { Flow.Dot.buildAndAttach([tabNote], { all: true }); } catch {}
     }
