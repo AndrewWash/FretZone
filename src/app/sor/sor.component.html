@@ -1,0 +1,166 @@
+@if (phase() === 'setup') {
+  <form [formGroup]="form" (ngSubmit)="start()" autocomplete="off" class="qz-setup">
+    <div class="qz-setup-head">
+      <div class="qz-setup-titles">
+        <h2 class="qz-setup-title">Sor</h2>
+        <p class="qz-setup-sub">Fernando Sor — 25 beginner etudes (Op. 60)</p>
+      </div>
+      <span class="qz-setup-badge">Setup</span>
+    </div>
+
+    <div class="qz-config-grid">
+      <div class="qz-config-col" role="group" aria-labelledby="sor-lbl-etude">
+        <div>
+          <span id="sor-lbl-etude" class="qz-field-lbl">Etude</span>
+          <p class="qz-field-hint">Only published etudes are selectable.</p>
+          <select formControlName="etudeId" class="sc-scale-select">
+            @for (e of etudes; track e.id) {
+              <option [value]="e.id" [disabled]="!e.enabled">
+                {{ etudeLabelOf(e.id) }}{{ e.enabled ? '' : ' (coming soon)' }}
+              </option>
+            }
+          </select>
+        </div>
+
+        <div role="group" aria-labelledby="sor-lbl-mode">
+          <span id="sor-lbl-mode" class="qz-field-lbl">Practice mode</span>
+          <label class="qz-opt-row">
+            <input type="radio" formControlName="practiceMode" value="metronome" />
+            Metronome advance (no mic)
+          </label>
+          <label class="qz-opt-row">
+            <input type="radio" formControlName="practiceMode" value="mic" />
+            Listen to mic
+          </label>
+        </div>
+      </div>
+
+      <div class="qz-config-col" role="group" aria-labelledby="sor-lbl-display">
+        <div>
+          <span id="sor-lbl-display" class="qz-field-lbl">Display</span>
+          <label class="qz-opt-row">
+            <input type="checkbox" formControlName="showTab" /> Show TAB
+          </label>
+          <label class="qz-opt-row">
+            <input type="checkbox" formControlName="showLhFingerings" /> Show LH fingerings
+          </label>
+          <label class="qz-opt-row">
+            <input type="checkbox" formControlName="showRhFingerings" /> Show RH fingerings
+          </label>
+          <label class="qz-opt-row">
+            <input type="checkbox"
+                   [checked]="theme.notationTheme() === 'dark'"
+                   (change)="theme.toggle()" />
+            Dark mode notation
+          </label>
+        </div>
+
+        <div role="group" aria-labelledby="sor-lbl-limit">
+          <span id="sor-lbl-limit" class="qz-field-lbl">Limit by</span>
+          <label class="qz-opt-row">
+            <input type="radio" formControlName="limitMode" value="iterations" />
+            Iterations
+          </label>
+          <label class="qz-opt-row">
+            <input type="radio" formControlName="limitMode" value="time" />
+            Time (min)
+          </label>
+          @if (limitModeSig() === 'iterations') {
+            <input type="number" min="1" max="200" formControlName="iterations" class="qz-num" aria-label="Iterations" />
+          } @else {
+            <input type="number" min="1" max="60" formControlName="timeMinutes" class="qz-num" aria-label="Minutes" />
+          }
+        </div>
+      </div>
+
+      @if (practiceModeSig() === 'mic') {
+        <div class="qz-config-col" role="group" aria-labelledby="sor-lbl-audio">
+          <span id="sor-lbl-audio" class="qz-field-lbl">Audio</span>
+          <label class="qz-opt-row">A4 (Hz) <input type="number" min="400" max="480" step="0.1" formControlName="a4" class="qz-num" /></label>
+          <label class="qz-opt-row">Tolerance (cents) <input type="number" min="5" max="50" step="1" formControlName="centsTolerance" class="qz-num" /></label>
+        </div>
+      }
+    </div>
+
+    <div class="qz-action">
+      <button type="submit" class="qz-start">
+        Start Etude <span class="qz-start-arrow" aria-hidden="true">→</span>
+      </button>
+    </div>
+  </form>
+}
+
+@if (phase() === 'running' && cfg(); as c) {
+  <div class="qz-run">
+    <div class="qz-run-head">
+      <h2 class="qz-run-title">
+        Sor
+        <span class="qz-progress-pip">{{ etudeTitle() }}</span>
+      </h2>
+      <div class="qz-run-actions">
+        @if (c.limitMode === 'time') {
+          <span class="qz-timer-pip" role="status" aria-live="polite">Timer started</span>
+        }
+        <button class="secondary" (click)="stopAndReset()">Stop</button>
+        <button class="secondary" (click)="restart()" aria-label="Restart this etude from the first note">Reset</button>
+        @if (c.practiceMode === 'mic') {
+          <button (click)="startMic()" [disabled]="micStarted()">Start Mic</button>
+        } @else if (iterationReady()) {
+          <button (click)="next()" aria-label="Continue to next iteration">Next →</button>
+        } @else {
+          <button (click)="playMetronome()">Play</button>
+        }
+      </div>
+    </div>
+
+    <app-metronome-bar />
+
+    <div class="mel-staff-wrap">
+      @if (etude(); as e) {
+        <app-etude-staff
+          [etude]="e"
+          [playedCount]="playedCount()"
+          [showTab]="c.showTab"
+          [showLhFingerings]="c.showLhFingerings"
+          [showRhFingerings]="c.showRhFingerings"
+          [width]="960" />
+      }
+    </div>
+
+    <div class="mel-stats">
+      @if (c.practiceMode === 'mic') {
+        <div class="qz-stat-block">
+          <div class="qz-stat-label">Heard</div>
+          <div class="qz-stat-value">{{ heard() }}</div>
+        </div>
+      }
+      <div class="qz-stat-block">
+        <div class="qz-stat-label">Status</div>
+        <div class="qz-stat-value" aria-live="polite">{{ status() }}</div>
+      </div>
+      <div class="qz-stat-block">
+        <div class="qz-stat-label">Notes</div>
+        <div class="qz-stat-value">{{ playedCount() }} / {{ totalNotes() }}</div>
+      </div>
+      <div class="qz-stat-block">
+        <div class="qz-stat-label">Iteration</div>
+        <div class="qz-stat-value">{{ iterationIdx() }} / {{ c.limitMode === 'iterations' ? c.iterations : '∞' }}</div>
+      </div>
+    </div>
+  </div>
+}
+
+@if (phase() === 'done') {
+  <div class="qz-done" role="main" aria-label="Etude complete">
+    @if (endedByTimer()) {
+      <p class="qz-done-sub">Times up!</p>
+    } @else {
+      <p class="qz-done-eyebrow">Etude complete</p>
+      <p class="qz-done-score">{{ etudeTitle() }}</p>
+      <p class="qz-done-sub">Clean run, top to bottom.</p>
+    }
+    <div class="qz-done-restart">
+      <button (click)="reset()">Try again</button>
+    </div>
+  </div>
+}

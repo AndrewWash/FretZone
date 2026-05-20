@@ -8,7 +8,13 @@ import { MetronomeBarComponent } from '../core/audio/metronome-bar.component';
 import { MetronomeService } from '../core/audio/metronome.service';
 import { AccidentalMode, BASE_LETTERS, BaseLetter, enharmonicDisplay } from '../core/theory/note';
 import { MODE_LABELS, MODE_NAMES, ModeName, preferFlatsFor } from '../core/theory/modes';
-import { defaultConfig, generatePhrase, normalizeBarCount, playablePool } from '../core/melody/engine';
+import {
+  createMelodyMetronomeCursor,
+  defaultConfig,
+  generatePhrase,
+  normalizeBarCount,
+  playablePool,
+} from '../core/melody/engine';
 import type {
   CustomOptions,
   Difficulty,
@@ -17,10 +23,12 @@ import type {
   MelodyConfig,
   MelodyPhrase,
   PhraseBarCount,
+  PracticeMode,
   ProgressionMode,
   TickDuration,
   TimeSignature,
 } from '../core/melody/models';
+import { waitForNextDownbeat, type BeatCursor } from '../core/audio/beat-cursor';
 import {
   ALL_NOTE_DURATIONS,
   ALL_REST_DURATIONS,
@@ -30,6 +38,7 @@ import {
 import type { StringId } from '../core/quiz/models';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
 import { MelodyStaffComponent } from '../notation/melody-staff.component';
+import { ThemeService } from '../core/theme/theme.service';
 
 const STORAGE_KEY = 'fretzone.melody.cfg.v2';
 
@@ -60,6 +69,7 @@ interface MelodyFormValue {
   allowedRestValues: boolean[];
   jumpTier: JumpTier;
   timeSignature: TimeSignature;
+  practiceMode: PracticeMode;
 }
 
 @Component({
@@ -72,6 +82,7 @@ export class MelodyComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private service = inject(PitchDetectService);
   private metronome = inject(MetronomeService);
+  protected theme = inject(ThemeService);
 
   protected baseLetters: BaseLetter[] = [...BASE_LETTERS];
   protected modeNames: ModeName[] = [...MODE_NAMES];
@@ -105,6 +116,8 @@ export class MelodyComponent implements OnDestroy {
   protected limitModeSig = signal<LimitMode>('iterations');
   protected difficultySig = signal<Difficulty>('Easy');
   protected allowRestsSig = signal(true);
+  protected practiceModeSig = signal<PracticeMode>('mic');
+  protected iterationReady = signal(false);
 
   // Wider staff when bars-per-row goes up so each bar still has room.
   // 8 and 16-bar phrases wrap at 4 bars/row, so they share the 4-bar width.
@@ -132,6 +145,8 @@ export class MelodyComponent implements OnDestroy {
   });
 
   private det: { start: () => Promise<void>; stop: () => void } | null = null;
+  private cursor: BeatCursor | null = null;
+  private cancelDownbeatWait: (() => void) | null = null;
   private sessionTimeoutId: any = null;
 
   constructor() {
@@ -173,11 +188,13 @@ export class MelodyComponent implements OnDestroy {
       allowedRestValues: this.restValuesArr,
       jumpTier: this.fb.nonNullable.control<JumpTier>(initialCustom.jumpTier),
       timeSignature: this.fb.nonNullable.control<TimeSignature>(initialCustom.timeSignature),
+      practiceMode: this.fb.nonNullable.control<PracticeMode>(initial.practiceMode ?? 'mic'),
     });
 
     this.limitModeSig.set(this.form.controls.limitMode.value);
     this.difficultySig.set(this.form.controls.difficulty.value);
     this.allowRestsSig.set(this.form.controls.allowRests.value);
+    this.practiceModeSig.set(this.form.controls.practiceMode.value);
 
     this.form.controls.limitMode.valueChanges
       .pipe(takeUntilDestroyed())
@@ -188,6 +205,9 @@ export class MelodyComponent implements OnDestroy {
     this.form.controls.allowRests.valueChanges
       .pipe(takeUntilDestroyed())
       .subscribe(v => this.allowRestsSig.set(v));
+    this.form.controls.practiceMode.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(v => this.practiceModeSig.set(v));
 
     this.form.valueChanges
       .pipe(takeUntilDestroyed())
@@ -233,6 +253,7 @@ export class MelodyComponent implements OnDestroy {
     this.micStarted.set(false);
     this.micUsed.set(false);
     this.endedByTimer.set(false);
+    this.iterationReady.set(false);
     try {
       this.phrase.set(generatePhrase(c));
     } catch (e: any) {
@@ -240,9 +261,66 @@ export class MelodyComponent implements OnDestroy {
       return;
     }
     this.idx.set(1);
-    this.status.set('Press Start Mic, then play the first note.');
+    this.status.set(c.practiceMode === 'mic'
+      ? 'Press Start Mic, then play the first note.'
+      : 'Press Play to start.');
     this.metronome.resetForNewSession();
     this.phase.set('running');
+  }
+
+  // Metronome-mode entry point. Sync cursor's beat-0 to the next audible
+  // downbeat so the highlight tracks the click. If the metronome is off,
+  // turn it on first — its first downbeat arrives ~50ms later and the
+  // cursor anchors to that.
+  protected playMetronome() {
+    if (this.cursor || this.cancelDownbeatWait) return;
+    const ph = this.phrase();
+    if (!ph) return;
+    this.armTimeLimitIfNeeded();
+    this.iterationReady.set(false);
+    if (!this.metronome.enabled()) this.metronome.setEnabled(true);
+    this.status.set('Counting in — starts on the next downbeat.');
+    this.cancelDownbeatWait = waitForNextDownbeat(
+      () => this.metronome.downbeatAt(),
+      (at) => {
+        this.cancelDownbeatWait = null;
+        this.cursor = createMelodyMetronomeCursor(ph, {
+          bpm: this.metronome.bpm(),
+          onAdvance: i => {
+            this.playedCount.set(i);
+          },
+          onComplete: () => this.onCursorComplete(),
+        });
+        this.cursor.start(at);
+        this.status.set('Playing — follow the metronome.');
+      },
+    );
+  }
+
+  private armTimeLimitIfNeeded() {
+    const c = this.cfg();
+    if (c?.limitMode === 'time' && this.sessionTimeoutId == null) {
+      this.sessionTimeoutId = setTimeout(
+        () => this.finishByTimer(),
+        c.timeMinutes * 60 * 1000,
+      );
+    }
+  }
+
+  private onCursorComplete() {
+    this.score.update(v => v + 1);
+    const c2 = this.cfg();
+    if (!c2) return;
+    if (c2.limitMode === 'iterations' && this.idx() >= c2.iterations) {
+      this.status.set('Done!');
+      this.cleanupRun();
+      this.phase.set('done');
+      return;
+    }
+    // Metronome mode: pause here. The user taps Next when they're ready.
+    this.tearDownCursor();
+    this.iterationReady.set(true);
+    this.status.set('Iteration complete — tap Next when you\'re ready.');
   }
 
   protected async startMic() {
@@ -282,12 +360,19 @@ export class MelodyComponent implements OnDestroy {
     if (this.phase() !== 'running') return;
     this.playedCount.set(0);
     this.heard.set('--');
-    if (this.micStarted()) {
-      this.tearDownDetection();
-      this.status.set('Restarted — play the first note.');
-      setTimeout(() => this.spinUpDetection(true), 0);
+    this.iterationReady.set(false);
+    const c = this.cfg();
+    if (c?.practiceMode === 'mic') {
+      if (this.micStarted()) {
+        this.tearDownDetection();
+        this.status.set('Restarted — play the first note.');
+        setTimeout(() => this.spinUpDetection(true), 0);
+      } else {
+        this.status.set('Restarted. Press Start Mic, then play the first note.');
+      }
     } else {
-      this.status.set('Restarted. Press Start Mic, then play the first note.');
+      this.tearDownCursor();
+      this.status.set('Restarted. Press Play.');
     }
   }
 
@@ -329,6 +414,7 @@ export class MelodyComponent implements OnDestroy {
     const c = this.cfg();
     if (!c) return;
     this.tearDownDetection();
+    this.tearDownCursor();
     try {
       this.phrase.set(generatePhrase(c));
     } catch (e: any) {
@@ -337,11 +423,16 @@ export class MelodyComponent implements OnDestroy {
     }
     this.playedCount.set(0);
     this.idx.update(v => v + 1);
-    if (this.micStarted()) {
-      this.status.set('Next phrase. Play the first note.');
-      setTimeout(() => this.spinUpDetection(true), 0);
+    this.iterationReady.set(false);
+    if (c.practiceMode === 'mic') {
+      if (this.micStarted()) {
+        this.status.set('Next phrase. Play the first note.');
+        setTimeout(() => this.spinUpDetection(true), 0);
+      } else {
+        this.status.set('Next phrase.');
+      }
     } else {
-      this.status.set('Next phrase.');
+      this.status.set('Next phrase. Press Play.');
     }
   }
 
@@ -364,6 +455,17 @@ export class MelodyComponent implements OnDestroy {
     }
   }
 
+  private tearDownCursor() {
+    if (this.cancelDownbeatWait) {
+      try { this.cancelDownbeatWait(); } catch {}
+      this.cancelDownbeatWait = null;
+    }
+    if (this.cursor) {
+      try { this.cursor.stop(); } catch {}
+      this.cursor = null;
+    }
+  }
+
   private finishByTimer() {
     if (this.phase() !== 'running') return;
     this.endedByTimer.set(true);
@@ -373,6 +475,7 @@ export class MelodyComponent implements OnDestroy {
 
   private cleanupRun() {
     this.tearDownDetection();
+    this.tearDownCursor();
     this.service.stop();
     if (this.sessionTimeoutId != null) {
       clearTimeout(this.sessionTimeoutId);
@@ -408,6 +511,7 @@ export class MelodyComponent implements OnDestroy {
         jumpTier: v.jumpTier,
         timeSignature: v.timeSignature,
       },
+      practiceMode: v.practiceMode === 'metronome' ? 'metronome' : 'mic',
     };
   }
 }
