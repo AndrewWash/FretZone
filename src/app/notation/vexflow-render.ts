@@ -4,6 +4,13 @@ import { keyAwareSpelling, keySignatureSpec, tonicPc, ModeName } from '../core/t
 import type { MelodyTickable, TimeSignature } from '../core/melody/models';
 import { BEATS_PER_BAR } from '../core/melody/models';
 import { rhFingerLabel, type RhFingeringPattern } from '../core/scales/models';
+import type {
+  EtudeBar,
+  EtudeNote,
+  EtudeTimeSignature,
+  SorEtude,
+} from '../core/sor/models';
+import { ETUDE_BEATS_PER_BAR, noteBeats } from '../core/sor/models';
 
 export type NotationTheme = 'light' | 'dark';
 
@@ -608,4 +615,443 @@ export function renderScaleEl(
       svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     }
   }
+}
+
+// ── Etude renderer ────────────────────────────────────────────────────────
+// Renders a multi-bar two-voice classical guitar piece (e.g. Sor Op. 60).
+// Differences from the Scale renderer:
+//   - per-bar barlines and time signature
+//   - two simultaneous voices per bar (stems up + stems down)
+//   - dotted notes, rests, and ties (including across bar lines)
+//   - per-note RH fingering labels (not a cyclic pattern)
+
+export interface EtudeRenderOptions {
+  width?: number;
+  showTab?: boolean;
+  showLhFingerings?: boolean;
+  showRhFingerings?: boolean;
+  theme?: NotationTheme;
+  // Max bars per row before wrapping. Default 4.
+  barsPerRow?: number;
+}
+
+interface BuiltEtudeNote {
+  // The VexFlow stave note (or null for rests, though we keep rests as notes).
+  staveNote: any;
+  tabNote: any | null;
+  // Position in the upper-voice play order (used for dimming). -1 for rests
+  // and for lower-voice notes (lower voice dims by beat position).
+  upperIndex: number;
+  // Cumulative beats from the start of the piece for this note's onset.
+  beatOnset: number;
+  source: EtudeNote;
+}
+
+interface BuiltBar {
+  upper: BuiltEtudeNote[];
+  lower: BuiltEtudeNote[];
+  upperVoice: any;
+  lowerVoice: any | null;
+  upperTabVoice: any | null;
+  lowerTabVoice: any | null;
+  // Cumulative beats from start of piece at the bar's onset.
+  beatStart: number;
+}
+
+function vfDuration(n: EtudeNote): string {
+  const base = n.duration;
+  const dotted = n.dotted ? 'd' : '';
+  const rest = n.kind === 'rest' ? 'r' : '';
+  return `${base}${dotted}${rest}`;
+}
+
+export function renderEtudeEl(
+  container: HTMLElement,
+  etude: SorEtude,
+  playedCount: number,
+  opts: EtudeRenderOptions = {},
+) {
+  const requestedWidth = opts.width ?? 960;
+  const showTab = !!opts.showTab;
+  const showLh = !!opts.showLhFingerings;
+  const showRh = !!opts.showRhFingerings;
+  const barsPerRow = Math.max(1, opts.barsPerRow ?? 4);
+  const tonic: BaseLetter = etude.key;
+  const tonicOffset = etude.keyOffset ?? 0;
+  const mode: ModeName = etude.keyMode;
+  const timeSignature: EtudeTimeSignature = etude.timeSignature;
+  const beatsPerBar = ETUDE_BEATS_PER_BAR[timeSignature];
+  const { FG, BG, DIM } = themeColors(opts.theme);
+  const DIM_STYLE = { fillStyle: DIM, strokeStyle: DIM };
+  const keySpec = keySignatureSpec(tonic, mode, tonicOffset);
+  container.innerHTML = '';
+
+  const bars = etude.bars;
+  if (!bars.length) {
+    // Empty etude — render an inviting placeholder stave so the layout
+    // doesn't collapse to zero height in setup/preview.
+    const renderer = new Flow.Renderer(container as HTMLDivElement, Flow.Renderer.Backends.SVG);
+    renderer.resize(requestedWidth, 120);
+    const ctx = renderer.getContext();
+    ctx.setFont('Arial', 10, '').setBackgroundFillStyle(BG);
+    const stave = new Flow.Stave(10, 20, requestedWidth - 20);
+    stave.addClef('treble').addKeySignature(keySpec).addTimeSignature(timeSignature);
+    styleStave(stave, FG);
+    stave.setContext(ctx).draw();
+    return;
+  }
+
+  // ── Layout math ──────────────────────────────────────────────────────────
+  const rows: EtudeBar[][] = [];
+  for (let i = 0; i < bars.length; i += barsPerRow) {
+    rows.push(bars.slice(i, i + barsPerRow));
+  }
+
+  // Per-row vertical block: treble (72) + optional tab (110 + 8 gap)
+  const trebleHeight = 72;
+  const tabGap = 8;
+  const tabHeight = showTab ? 110 : 0;
+  const rowGap = 30;
+  const noTabClearance = showTab ? 0 : 40;
+  // Extra headroom when RH fingerings are on so a TOP-justified annotation
+  // above high notes isn't clipped at the SVG top edge.
+  const topPad = 30 + (showRh ? 14 : 0);
+  const rowHeight = trebleHeight + tabGap + tabHeight + noTabClearance;
+  const bottomPad = showTab ? 20 : 40;
+  const height = topPad + rows.length * rowHeight + Math.max(0, rows.length - 1) * rowGap + bottomPad;
+
+  const renderer = new Flow.Renderer(container as HTMLDivElement, Flow.Renderer.Backends.SVG);
+  renderer.resize(requestedWidth, height);
+  const ctx = renderer.getContext();
+  ctx.setFont('Arial', 10, '').setBackgroundFillStyle(BG);
+  try { (ctx as any).setFillStyle?.(FG); (ctx as any).setStrokeStyle?.(FG); } catch {}
+
+  // ── Build voices for every bar ───────────────────────────────────────────
+  // Walk bars in play order, assigning an upperIndex to each non-rest upper
+  // note so playedCount can map back to "Nth melody note played".
+
+  let upperCursor = 0;
+  let beatCursor = 0;
+  const built: BuiltBar[] = bars.map(bar => {
+    const beatStart = beatCursor;
+
+    // Upper voice — stems up, default direction.
+    const upper = bar.upper.map(src => buildBuiltNote(
+      src, tonic, mode, tonicOffset, FG, showTab, showLh, showRh, 1,
+    ));
+    // Assign sequence indices for non-rest upper notes (used for dimming).
+    let upperBeat = beatStart;
+    for (let i = 0; i < upper.length; i++) {
+      upper[i].beatOnset = upperBeat;
+      if (upper[i].source.kind === 'note') {
+        upper[i].upperIndex = upperCursor++;
+      }
+      upperBeat += noteBeats(upper[i].source);
+    }
+
+    // Lower voice — stems down. May be empty.
+    const lower = bar.lower.length
+      ? bar.lower.map(src => buildBuiltNote(
+          src, tonic, mode, tonicOffset, FG, showTab, showLh, showRh, -1,
+        ))
+      : [];
+    let lowerBeat = beatStart;
+    for (let i = 0; i < lower.length; i++) {
+      lower[i].beatOnset = lowerBeat;
+      lower[i].upperIndex = -1;
+      lowerBeat += noteBeats(lower[i].source);
+    }
+
+    // Bar uses quarter-note beat value internally; convert dotted-eighth-based
+    // meters (3/8, 6/8) to quarter beats via ETUDE_BEATS_PER_BAR.
+    const upperVoice = new Flow.Voice({ num_beats: beatsPerBar, beat_value: 4 });
+    upperVoice.setMode(Flow.Voice.Mode.SOFT);
+    upperVoice.addTickables(upper.map(b => b.staveNote));
+
+    let lowerVoice: any = null;
+    if (lower.length) {
+      lowerVoice = new Flow.Voice({ num_beats: beatsPerBar, beat_value: 4 });
+      lowerVoice.setMode(Flow.Voice.Mode.SOFT);
+      lowerVoice.addTickables(lower.map(b => b.staveNote));
+    }
+
+    // Apply key-signature-aware accidentals to both voices independently.
+    try { Flow.Accidental.applyAccidentals([upperVoice], keySpec); } catch {}
+    if (lowerVoice) {
+      try { Flow.Accidental.applyAccidentals([lowerVoice], keySpec); } catch {}
+    }
+    // Re-style after applyAccidentals so any newly added accidental glyphs
+    // pick up the theme foreground.
+    for (const b of upper) styleNote(b.staveNote, FG);
+    for (const b of lower) styleNote(b.staveNote, FG);
+
+    let upperTabVoice: any = null;
+    let lowerTabVoice: any = null;
+    if (showTab) {
+      const upperTabs = upper.map(b => b.tabNote).filter(Boolean);
+      if (upperTabs.length) {
+        upperTabVoice = new Flow.Voice({ num_beats: beatsPerBar, beat_value: 4 });
+        upperTabVoice.setMode(Flow.Voice.Mode.SOFT);
+        upperTabVoice.addTickables(upperTabs);
+      }
+      const lowerTabs = lower.map(b => b.tabNote).filter(Boolean);
+      if (lowerTabs.length) {
+        lowerTabVoice = new Flow.Voice({ num_beats: beatsPerBar, beat_value: 4 });
+        lowerTabVoice.setMode(Flow.Voice.Mode.SOFT);
+        lowerTabVoice.addTickables(lowerTabs);
+      }
+    }
+
+    beatCursor = beatStart + beatsPerBar;
+
+    return { upper, lower, upperVoice, lowerVoice, upperTabVoice, lowerTabVoice, beatStart };
+  });
+
+  // ── Resolve ties ─────────────────────────────────────────────────────────
+  // A note with tieToNext links to the next note in the SAME voice (next index
+  // in the bar; if at the end of a bar, the first note of the same voice in
+  // the next bar). Mismatched pitch is allowed (renderer just draws the
+  // curve); the engine is responsible for musical validity.
+
+  const ties: any[] = [];
+  for (let bi = 0; bi < bars.length; bi++) {
+    for (const voice of ['upper', 'lower'] as const) {
+      const arr = voice === 'upper' ? built[bi].upper : built[bi].lower;
+      for (let ni = 0; ni < arr.length; ni++) {
+        if (!arr[ni].source.tieToNext) continue;
+        const next = ni + 1 < arr.length
+          ? arr[ni + 1]
+          : findFirstInNextBar(built, bi, voice);
+        if (!next) continue;
+        try {
+          const tie = new Flow.StaveTie({
+            first_note: arr[ni].staveNote,
+            last_note: next.staveNote,
+            first_indices: [0],
+            last_indices: [0],
+          });
+          ties.push(tie);
+        } catch {}
+      }
+    }
+  }
+
+  // ── Probe lead-in width for clef + key sig + time sig ────────────────────
+  const probe = new Flow.Stave(0, 0, 400)
+    .addClef('treble')
+    .addKeySignature(keySpec)
+    .addTimeSignature(timeSignature);
+  probe.setContext(ctx);
+  let leadWidth = probe.getNoteStartX() - probe.getX();
+  if (!isFinite(leadWidth) || leadWidth < 60) leadWidth = 90;
+
+  const totalAvailable = requestedWidth - 20;
+
+  // ── Render bars row by row ───────────────────────────────────────────────
+  let barCursor = 0;
+  rows.forEach((rowBars, rowIdx) => {
+    const yTop = topPad + rowIdx * (rowHeight + rowGap);
+    const noteArea = (totalAvailable - leadWidth) / rowBars.length;
+
+    let xCursor = 10;
+    rowBars.forEach((_bar, i) => {
+      const staveWidth = i === 0 ? noteArea + leadWidth : noteArea;
+      const b = built[barCursor + i];
+
+      // Treble stave.
+      const stave = new Flow.Stave(xCursor, yTop, staveWidth);
+      if (i === 0) {
+        stave.addClef('treble').addKeySignature(keySpec).addTimeSignature(timeSignature);
+      }
+      styleStave(stave, FG);
+      stave.setContext(ctx).draw();
+
+      // Tab stave.
+      let tabStave: any = null;
+      if (showTab) {
+        tabStave = new Flow.TabStave(xCursor, yTop + trebleHeight + tabGap, staveWidth);
+        tabStave.addClef('tab').setNumLines(6);
+        styleStave(tabStave, FG);
+        tabStave.setContext(ctx).draw();
+        tabStave.setNoteStartX(stave.getNoteStartX());
+      }
+
+      // Dim notes based on playedCount + beat position.
+      const dimUpTo = playedCount;
+      for (const bn of b.upper) {
+        if (bn.upperIndex >= 0 && bn.upperIndex < dimUpTo) {
+          styleNote(bn.staveNote, DIM);
+          if (bn.tabNote) bn.tabNote.setStyle(DIM_STYLE);
+        }
+      }
+      // Lower voice dims when the last-played upper note's beat onset has
+      // passed this lower note's onset (so bass voice stays in step with
+      // the melody cursor visually).
+      const upperPlayedBeatLimit = findUpperPlayedBeatLimit(built, dimUpTo);
+      for (const bn of b.lower) {
+        if (bn.beatOnset < upperPlayedBeatLimit) {
+          styleNote(bn.staveNote, DIM);
+          if (bn.tabNote) bn.tabNote.setStyle(DIM_STYLE);
+        }
+      }
+
+      // Format + draw notation voices.
+      const voicesToFormat: any[] = [b.upperVoice];
+      if (b.lowerVoice) voicesToFormat.push(b.lowerVoice);
+      if (b.upperTabVoice) voicesToFormat.push(b.upperTabVoice);
+      if (b.lowerTabVoice) voicesToFormat.push(b.lowerTabVoice);
+      const formatter = new Flow.Formatter();
+      formatter.joinVoices([b.upperVoice]);
+      if (b.lowerVoice) formatter.joinVoices([b.lowerVoice]);
+      if (b.upperTabVoice) formatter.joinVoices([b.upperTabVoice]);
+      if (b.lowerTabVoice) formatter.joinVoices([b.lowerTabVoice]);
+      try {
+        formatter.format(voicesToFormat, Math.max(60, staveWidth - (i === 0 ? leadWidth : 0) - 20));
+      } catch {
+        // Last-ditch: format without joining if voice tick math mismatches.
+      }
+
+      // Beam eighths and shorter within each voice.
+      const upperBeams = buildEtudeBeams(b.upper);
+      const lowerBeams = buildEtudeBeams(b.lower);
+
+      b.upperVoice.draw(ctx, stave);
+      if (b.lowerVoice) b.lowerVoice.draw(ctx, stave);
+      if (b.upperTabVoice && tabStave) b.upperTabVoice.draw(ctx, tabStave);
+      if (b.lowerTabVoice && tabStave) b.lowerTabVoice.draw(ctx, tabStave);
+
+      [...upperBeams, ...lowerBeams].forEach(beam => {
+        try { beam.setStyle({ fillStyle: FG, strokeStyle: FG }); } catch {}
+        beam.setContext(ctx).draw();
+      });
+
+      xCursor += staveWidth;
+    });
+
+    barCursor += rowBars.length;
+  });
+
+  // Draw ties last so they sit on top of the staves and pick up any cross-bar
+  // routing the formatter assigned to the note positions.
+  ties.forEach(tie => {
+    try { tie.setStyle({ fillStyle: FG, strokeStyle: FG }); } catch {}
+    tie.setContext(ctx).draw();
+  });
+}
+
+// Build a single VexFlow note (StaveNote + optional TabNote) from an EtudeNote.
+function buildBuiltNote(
+  src: EtudeNote,
+  tonic: BaseLetter,
+  mode: ModeName,
+  tonicOffset: 0 | 1 | -1,
+  fg: string,
+  showTab: boolean,
+  showLh: boolean,
+  showRh: boolean,
+  stemDirection: 1 | -1,
+): BuiltEtudeNote {
+  const dur = vfDuration(src);
+
+  let staveNote: any;
+  if (src.kind === 'rest') {
+    staveNote = new Flow.StaveNote({ keys: ['b/4'], duration: dur });
+  } else {
+    const written = (src.midi ?? 60) + 12; // sounding → written (octave up)
+    const sp = keyAwareSpelling(written, tonic, mode, tonicOffset);
+    staveNote = new Flow.StaveNote({
+      keys: [sp.key],
+      duration: dur,
+      clef: 'treble',
+      stem_direction: stemDirection,
+    });
+    if (src.dotted) {
+      try { Flow.Dot.buildAndAttach([staveNote], { all: true }); } catch {}
+    }
+    if (showLh && src.lhFinger != null && src.lhFinger >= 0) {
+      const fhf = new Flow.FretHandFinger(String(src.lhFinger));
+      try {
+        const pos = (Flow as any).Modifier?.Position?.BELOW;
+        if (pos != null) fhf.setPosition(pos);
+      } catch {}
+      staveNote.addModifier(fhf, 0);
+    }
+    if (showRh && src.rhFinger) {
+      const ann = new Flow.Annotation(src.rhFinger);
+      try {
+        const top = (Flow as any).Annotation?.VerticalJustify?.TOP;
+        if (top != null) ann.setVerticalJustification(top);
+      } catch {}
+      staveNote.addModifier(ann, 0);
+    }
+  }
+  styleNote(staveNote, fg);
+
+  let tabNote: any | null = null;
+  if (showTab && src.kind === 'note' && src.stringId != null && src.fret != null) {
+    tabNote = new Flow.TabNote({
+      positions: [{ str: src.stringId, fret: src.fret }],
+      duration: dur,
+    });
+    if (src.dotted) {
+      try { Flow.Dot.buildAndAttach([tabNote], { all: true }); } catch {}
+    }
+    tabNote.setStyle({ fillStyle: fg, strokeStyle: fg });
+  }
+
+  return { staveNote, tabNote, upperIndex: -1, beatOnset: 0, source: src };
+}
+
+function findFirstInNextBar(built: BuiltBar[], barIdx: number, voice: 'upper' | 'lower'): BuiltEtudeNote | null {
+  for (let i = barIdx + 1; i < built.length; i++) {
+    const arr = voice === 'upper' ? built[i].upper : built[i].lower;
+    if (arr.length) return arr[0];
+  }
+  return null;
+}
+
+// Walk built bars and beam runs of eighths-or-shorter notes within a single
+// voice. Beams reset across the end of each run, on rests, and on duration
+// boundaries (e.g. a quarter inside a run of eighths splits the beam).
+function buildEtudeBeams(arr: BuiltEtudeNote[]): any[] {
+  if (!arr.length) return [];
+  const beamables: any[][] = [];
+  let cur: any[] = [];
+  const flush = () => {
+    if (cur.length >= 2) beamables.push(cur);
+    cur = [];
+  };
+  for (const b of arr) {
+    const d = b.source.duration;
+    const isShort = d === '8' || d === '16' || d === '32';
+    if (b.source.kind === 'note' && isShort) {
+      cur.push(b.staveNote);
+    } else {
+      flush();
+    }
+  }
+  flush();
+  const beams: any[] = [];
+  for (const group of beamables) {
+    try { beams.push(new Flow.Beam(group)); } catch {}
+  }
+  return beams;
+}
+
+// Among all built bars in piece order, return the beat onset of the
+// (playedCount)-th non-rest upper note. Anything strictly before that onset
+// is "already played" for lower-voice dimming.
+function findUpperPlayedBeatLimit(built: BuiltBar[], playedCount: number): number {
+  if (playedCount <= 0) return -1;
+  let count = 0;
+  for (const b of built) {
+    for (const bn of b.upper) {
+      if (bn.source.kind !== 'note') continue;
+      count++;
+      if (count >= playedCount) {
+        return bn.beatOnset + noteBeats(bn.source);
+      }
+    }
+  }
+  return Number.POSITIVE_INFINITY;
 }

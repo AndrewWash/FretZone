@@ -26,4 +26,8 @@ export const routes: Routes = [
     path: 'timebase',
     loadComponent: () => import('./timebase/timebase.component').then(m => m.TimebaseComponent),
   },
+  {
+    path: 'sor',
+    loadComponent: () => import('./sor/sor.component').then(m => m.SorComponent),
+  },
 ];

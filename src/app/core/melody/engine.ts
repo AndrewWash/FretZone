@@ -53,6 +53,7 @@ export function defaultConfig(): MelodyConfig {
     centsTolerance: 25,
     progression: 'Off',
     custom: defaultCustomOptions(),
+    practiceMode: 'mic',
   };
 }
 
@@ -153,3 +154,36 @@ function assemblePhrase(
 }
 
 export const ALL_TONICS = [...BASE_LETTERS];
+
+// ── Metronome-driven cursor ─────────────────────────────────────────────────
+// Walks a phrase's note-onsets at a fixed BPM, advancing playedCount as each
+// note's beat-position is reached. Used by the melody applet's metronome
+// practice mode (no mic). Mirrors the Sor applet's cursor.
+
+import { createBeatCursor, type BeatCursor } from '../audio/beat-cursor';
+
+export interface MelodyCursorOpts {
+  bpm: number;
+  onAdvance: (playedIndex: number) => void;
+  onComplete: () => void;
+}
+
+export function totalPhraseBeats(phrase: MelodyPhrase): number {
+  return phrase.bars.length * BEATS_PER_BAR[phrase.timeSignature];
+}
+
+export function createMelodyMetronomeCursor(
+  phrase: MelodyPhrase,
+  opts: MelodyCursorOpts,
+): BeatCursor {
+  const noteOnsets = phrase.tickables
+    .filter(t => t.kind === 'note')
+    .map(t => t.beat);
+  return createBeatCursor({
+    bpm: opts.bpm,
+    noteOnsets,
+    totalBeats: totalPhraseBeats(phrase),
+    onAdvance: opts.onAdvance,
+    onComplete: opts.onComplete,
+  });
+}

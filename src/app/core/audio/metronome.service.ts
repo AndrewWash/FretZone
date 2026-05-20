@@ -40,6 +40,10 @@ export class MetronomeService {
   readonly volume = signal(DEFAULT_VOLUME);
   readonly timeSig = signal<TimeSig>(DEFAULT_TIMESIG);
   readonly beatIdx = signal(0);
+  // performance.now() value of the most recent audible downbeat (idxInBar=0).
+  // Used by tempo-driven cursors to align "beat 0" with the click the user
+  // actually hears. 0 means "no downbeat fired yet this run".
+  readonly downbeatAt = signal(0);
 
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -109,6 +113,7 @@ export class MetronomeService {
     }
     this.beatCounter = 0;
     this.beatIdx.set(0);
+    this.downbeatAt.set(0);
     this.nextBeatTime = ctx.currentTime + 0.05;
     this.schedulerId = setInterval(() => this.scheduleAhead(), SCHEDULER_INTERVAL_MS);
   }
@@ -120,6 +125,7 @@ export class MetronomeService {
     }
     this.beatCounter = 0;
     this.beatIdx.set(0);
+    this.downbeatAt.set(0);
   }
 
   // Called by mode components on phase 'setup' -> 'running' transition so the
@@ -219,6 +225,7 @@ export class MetronomeService {
     const delayMs = Math.max(0, (startAt - ctx.currentTime) * 1000);
     setTimeout(() => {
       this.beatIdx.set(idxInBar);
+      if (idxInBar === 0) this.downbeatAt.set(performance.now());
     }, delayMs);
   }
 

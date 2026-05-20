@@ -8,6 +8,7 @@ export type PhraseBarCount = 2 | 4 | 8 | 16;
 export const PHRASE_BAR_OPTIONS: readonly PhraseBarCount[] = [2, 4, 8, 16];
 
 export type LimitMode = 'iterations' | 'time';
+export type PracticeMode = 'mic' | 'metronome';
 
 // Off = never apply a progression; On = always; Random = roll per phrase.
 export type ProgressionMode = 'Off' | 'On' | 'Random';
@@ -54,6 +55,7 @@ export interface MelodyConfig {
   centsTolerance: number;
   progression: ProgressionMode;
   custom: CustomOptions;
+  practiceMode: PracticeMode;
 }
 
 export type TickKind = 'note' | 'rest';
