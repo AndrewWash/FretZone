@@ -16,6 +16,7 @@ import {
   overrideSpellingForTritone,
 } from '../core/intervals/engine';
 import { ThemeService } from '../core/theme/theme.service';
+import { PracticeTimerService } from '../core/timer/practice-timer.service';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
 import { StaffComponent } from '../notation/staff.component';
 import { Spelled } from '../notation/vexflow-render';
@@ -50,6 +51,8 @@ export class IntervalsComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private service = inject(PitchDetectService);
   protected theme = inject(ThemeService);
+  private practiceTimer = inject(PracticeTimerService);
+  private runCounted = false;
 
   protected allIntervals = ALL_INTERVALS;
 
@@ -145,6 +148,10 @@ export class IntervalsComponent implements OnDestroy {
       return;
     }
     this.phase.set('running');
+    if (!this.runCounted) {
+      this.runCounted = true;
+      this.practiceTimer.markRunStart();
+    }
     this.renderStep();
   }
 
@@ -295,6 +302,10 @@ export class IntervalsComponent implements OnDestroy {
   }
 
   private cleanupRun() {
+    if (this.runCounted) {
+      this.runCounted = false;
+      this.practiceTimer.markRunEnd();
+    }
     if (this.activeDet) {
       try { this.activeDet.stop(); } catch {}
       this.activeDet = null;

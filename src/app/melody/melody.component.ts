@@ -39,6 +39,7 @@ import type { StringId } from '../core/quiz/models';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
 import { MelodyStaffComponent } from '../notation/melody-staff.component';
 import { ThemeService } from '../core/theme/theme.service';
+import { PracticeTimerService } from '../core/timer/practice-timer.service';
 
 const STORAGE_KEY = 'fretzone.melody.cfg.v2';
 
@@ -83,6 +84,8 @@ export class MelodyComponent implements OnDestroy {
   private service = inject(PitchDetectService);
   private metronome = inject(MetronomeService);
   protected theme = inject(ThemeService);
+  private practiceTimer = inject(PracticeTimerService);
+  private runCounted = false;
 
   protected baseLetters: BaseLetter[] = [...BASE_LETTERS];
   protected modeNames: ModeName[] = [...MODE_NAMES];
@@ -266,6 +269,10 @@ export class MelodyComponent implements OnDestroy {
       : 'Press Play to start.');
     this.metronome.resetForNewSession();
     this.phase.set('running');
+    if (!this.runCounted) {
+      this.runCounted = true;
+      this.practiceTimer.markRunStart();
+    }
   }
 
   // Metronome-mode entry point. Sync cursor's beat-0 to the next audible
@@ -474,6 +481,10 @@ export class MelodyComponent implements OnDestroy {
   }
 
   private cleanupRun() {
+    if (this.runCounted) {
+      this.runCounted = false;
+      this.practiceTimer.markRunEnd();
+    }
     this.tearDownDetection();
     this.tearDownCursor();
     this.service.stop();

@@ -178,6 +178,19 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
   animation: fz-fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+.app-header-center {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .app-header-center {
+    flex-basis: 100%;
+    order: 3;
+  }
+}
+
 .app-brand {
   display: flex;
   align-items: center;
@@ -1785,6 +1798,170 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
   .fz-metronome-readout {
     min-width: 2.75rem;
   }
+}
+
+/* ══════════════════════════════════════════════
+   Practice timer (global, top-bar)
+   ══════════════════════════════════════════════ */
+.fz-ptimer-host {
+  display: inline-flex;
+}
+
+.fz-ptimer-reveal {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.75rem;
+  background: var(--fz-s2);
+  color: var(--fz-t2);
+  border: 1px solid var(--fz-b0);
+  border-radius: 999px;
+  font-family: var(--fz-display);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+.fz-ptimer-reveal:hover {
+  color: var(--fz-t1);
+  border-color: var(--fz-b1);
+}
+.fz-ptimer-reveal:focus-visible {
+  outline: 2px solid var(--fz-accent);
+  outline-offset: 2px;
+}
+
+.fz-ptimer {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  background: var(--fz-s2);
+  border: 1px solid var(--fz-b0);
+  border-radius: var(--fz-radius);
+}
+
+.fz-ptimer-toggle,
+.fz-ptimer-btn {
+  padding: 0.3rem 0.7rem;
+  background: var(--fz-s2);
+  color: var(--fz-t2);
+  border: 1px solid var(--fz-b0);
+  border-radius: 999px;
+  font-family: var(--fz-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+.fz-ptimer-toggle:hover,
+.fz-ptimer-btn:hover:not(:disabled) {
+  color: var(--fz-t1);
+  border-color: var(--fz-b1);
+}
+.fz-ptimer-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.fz-ptimer-toggle:focus-visible,
+.fz-ptimer-btn:focus-visible {
+  outline: 2px solid var(--fz-accent);
+  outline-offset: 2px;
+}
+
+.fz-ptimer-modes {
+  display: inline-flex;
+  border: 1px solid var(--fz-b0);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--fz-s2);
+}
+.fz-ptimer-mode-btn {
+  padding: 0.25rem 0.6rem;
+  background: transparent;
+  color: var(--fz-t3);
+  border: none;
+  font-family: var(--fz-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+.fz-ptimer-mode-btn:hover {
+  color: var(--fz-t1);
+}
+.fz-ptimer-mode-btn.is-on {
+  color: var(--fz-accent-text);
+  background: var(--fz-accent-bg);
+}
+.fz-ptimer-mode-btn:focus-visible {
+  outline: 2px solid var(--fz-accent);
+  outline-offset: -2px;
+}
+
+.fz-ptimer-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.fz-ptimer-lbl {
+  font-family: var(--fz-display);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fz-t3);
+}
+.fz-ptimer-input {
+  width: 3.25rem;
+  padding: 0.2rem 0.4rem;
+  background: var(--fz-s1);
+  color: var(--fz-t1);
+  border: 1px solid var(--fz-b0);
+  border-radius: var(--fz-radius-sm);
+  font-family: var(--fz-display);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.fz-ptimer-input:focus-visible {
+  outline: 2px solid var(--fz-accent);
+  outline-offset: 1px;
+}
+
+.fz-ptimer-readout {
+  font-family: var(--fz-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--fz-t1);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  min-width: 3rem;
+  text-align: center;
+}
+
+.fz-ptimer-badge {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-family: var(--fz-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--fz-err);
+  border: 1px solid var(--fz-err);
+  background: transparent;
+}
+.fz-ptimer-badge.is-overtime {
+  color: var(--fz-t2);
+  border-color: var(--fz-b1);
+}
+
+.fz-ptimer-host.is-finished .fz-ptimer-readout {
+  color: var(--fz-err);
 }
 
 /* ══════════════════════════════════════════════

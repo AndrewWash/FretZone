@@ -25,6 +25,7 @@ import {
   type ScalesConfig,
 } from '../core/scales/models';
 import { ThemeService } from '../core/theme/theme.service';
+import { PracticeTimerService } from '../core/timer/practice-timer.service';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
 import { ScaleStaffComponent } from '../notation/scale-staff.component';
 import {
@@ -45,6 +46,8 @@ export class ScalesComponent implements OnDestroy {
   private service = inject(PitchDetectService);
   private metronome = inject(MetronomeService);
   protected theme = inject(ThemeService);
+  private practiceTimer = inject(PracticeTimerService);
+  private runCounted = false;
 
   protected patternGroups = scalesGroupedByPattern();
   protected rhFingeringOptions = RH_FINGERING_OPTIONS;
@@ -201,6 +204,10 @@ export class ScalesComponent implements OnDestroy {
     this.status.set('Press Start Mic, then play the first note.');
     this.metronome.resetForNewSession();
     this.phase.set('running');
+    if (!this.runCounted) {
+      this.runCounted = true;
+      this.practiceTimer.markRunStart();
+    }
   }
 
   private finishByTimer() {
@@ -300,6 +307,10 @@ export class ScalesComponent implements OnDestroy {
   }
 
   private cleanupRun() {
+    if (this.runCounted) {
+      this.runCounted = false;
+      this.practiceTimer.markRunEnd();
+    }
     this.tearDownDetection();
     if (this.sessionTimeoutId != null) {
       clearTimeout(this.sessionTimeoutId);

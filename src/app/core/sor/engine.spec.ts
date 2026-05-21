@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { SOR_OP60_NO1 } from './catalog';
-import { flattenUpperVoice, sliceEtudeByRanges, totalBeats, upperNoteCount, validateTies } from './engine';
+import {
+  expandBarOrder,
+  flattenPlaySequence,
+  flattenUpperVoice,
+  sliceEtudeByRanges,
+  totalBeats,
+  upperNoteCount,
+  validateTies,
+} from './engine';
 import type { SorEtude } from './models';
 
 describe('sor/engine flattenUpperVoice', () => {
@@ -97,6 +105,77 @@ describe('sor/engine bar-length structure', () => {
   });
 });
 
+describe('sor/engine expandBarOrder', () => {
+  it('unrolls Op. 60 No. 1 repeats to m1-8, m1-8, m9-16, m9-16', () => {
+    const order = expandBarOrder(SOR_OP60_NO1);
+    const first8 = [0, 1, 2, 3, 4, 5, 6, 7];
+    const second8 = [8, 9, 10, 11, 12, 13, 14, 15];
+    expect(order).toEqual([...first8, ...first8, ...second8, ...second8]);
+  });
+
+  it('returns a straight 0..n-1 pass for an etude with no repeat flags', () => {
+    const noRepeats: SorEtude = {
+      ...SOR_OP60_NO1,
+      bars: SOR_OP60_NO1.bars.map(b => ({
+        upper: b.upper,
+        lower: b.lower,
+      })),
+    };
+    expect(expandBarOrder(noRepeats)).toEqual(
+      noRepeats.bars.map((_, i) => i),
+    );
+  });
+
+  it('a backward repeat with no forward repeat loops from bar 0', () => {
+    const etude: SorEtude = {
+      ...SOR_OP60_NO1,
+      bars: [
+        { upper: [], lower: [] },
+        { upper: [], lower: [], endRepeat: true },
+        { upper: [], lower: [] },
+      ],
+    };
+    expect(expandBarOrder(etude)).toEqual([0, 1, 0, 1, 2]);
+  });
+});
+
+describe('sor/engine flattenPlaySequence', () => {
+  it('doubles the note count for the fully-repeated Op. 60 No. 1', () => {
+    const physical = flattenUpperVoice(SOR_OP60_NO1);
+    const played = flattenPlaySequence(SOR_OP60_NO1);
+    expect(played.length).toBe(physical.length * 2);
+  });
+
+  it('keeps beatOnset non-decreasing across the expanded timeline', () => {
+    const seq = flattenPlaySequence(SOR_OP60_NO1);
+    for (let i = 1; i < seq.length; i++) {
+      expect(seq[i].beatOnset).toBeGreaterThanOrEqual(seq[i - 1].beatOnset);
+    }
+  });
+
+  it('maps the second m1 pass back to physical bar 0, note 0', () => {
+    const seq = flattenPlaySequence(SOR_OP60_NO1);
+    // The first pass covers m1-8; the second pass of m1-8 starts right after.
+    const firstPassNotes = SOR_OP60_NO1.bars
+      .slice(0, 8)
+      .reduce((s, b) => s + b.upper.filter(n => n.kind === 'note').length, 0);
+    const secondPassStart = seq[firstPassNotes];
+    expect(secondPassStart.barIndex).toBe(0);
+    expect(secondPassStart.physicalIndex).toBe(0);
+    expect(secondPassStart.midi).toBe(seq[0].midi);
+  });
+
+  it('matches flattenUpperVoice when the etude has no repeats', () => {
+    const noRepeats: SorEtude = {
+      ...SOR_OP60_NO1,
+      bars: SOR_OP60_NO1.bars.map(b => ({ upper: b.upper, lower: b.lower })),
+    };
+    expect(flattenPlaySequence(noRepeats).length).toBe(
+      flattenUpperVoice(noRepeats).length,
+    );
+  });
+});
+
 describe('sor/engine sliceEtudeByRanges', () => {
   it('returns the original etude when no ranges are provided', () => {
     const out = sliceEtudeByRanges(SOR_OP60_NO1, []);
@@ -117,9 +196,11 @@ describe('sor/engine sliceEtudeByRanges', () => {
   it('keeps a single mid-piece range with no section breaks', () => {
     const out = sliceEtudeByRanges(SOR_OP60_NO1, [{ start: 3, end: 5 }]);
     expect(out.etude.bars.length).toBe(3);
-    expect(out.etude.bars[0]).toBe(SOR_OP60_NO1.bars[2]);
-    expect(out.etude.bars[1]).toBe(SOR_OP60_NO1.bars[3]);
-    expect(out.etude.bars[2]).toBe(SOR_OP60_NO1.bars[4]);
+    // Sliced bars are shallow clones (repeat flags stripped) but carry the
+    // original voice arrays by reference.
+    expect(out.etude.bars[0].upper).toBe(SOR_OP60_NO1.bars[2].upper);
+    expect(out.etude.bars[1].upper).toBe(SOR_OP60_NO1.bars[3].upper);
+    expect(out.etude.bars[2].upper).toBe(SOR_OP60_NO1.bars[4].upper);
     expect(out.originalBarNumbers).toEqual([3, 4, 5]);
     expect(out.sectionBreakBefore).toEqual([false, false, false]);
   });
@@ -180,6 +261,24 @@ describe('sor/engine sliceEtudeByRanges', () => {
     expect(out.etude.key).toBe(SOR_OP60_NO1.key);
     expect(out.etude.timeSignature).toBe(SOR_OP60_NO1.timeSignature);
     expect(out.etude.defaultBpm).toBe(SOR_OP60_NO1.defaultBpm);
+  });
+
+  it('strips repeat barlines from a real sub-range slice', () => {
+    // m8 carries endRepeat, m9 carries startRepeat in the catalog.
+    const out = sliceEtudeByRanges(SOR_OP60_NO1, [{ start: 8, end: 9 }]);
+    for (const bar of out.etude.bars) {
+      expect(bar.startRepeat).toBeFalsy();
+      expect(bar.endRepeat).toBeFalsy();
+    }
+    // The sliced range therefore plays straight through, no inner loop.
+    expect(expandBarOrder(out.etude)).toEqual([0, 1]);
+  });
+
+  it('keeps repeat barlines on the un-sliced full piece', () => {
+    const out = sliceEtudeByRanges(SOR_OP60_NO1, []);
+    expect(out.etude).toBe(SOR_OP60_NO1);
+    expect(out.etude.bars[7].endRepeat).toBe(true);
+    expect(out.etude.bars[8].startRepeat).toBe(true);
   });
 
   it('totalBeats and upperNoteCount adapt to the slice', () => {
