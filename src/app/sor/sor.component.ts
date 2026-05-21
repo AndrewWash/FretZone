@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { PitchDetectService } from '../core/audio/pitch-detect.service';
@@ -9,6 +9,7 @@ import { enharmonicDisplay } from '../core/theory/note';
 import {
   defaultSorConfig,
   type LimitMode,
+  type MeasureRange,
   type PracticeMode,
   type SorConfig,
   type SorEtude,
@@ -19,8 +20,10 @@ import {
   getEtudeById,
 } from '../core/sor/catalog';
 import {
+  barIndexForUpperNote,
   createMetronomeCursor,
   flattenUpperVoice,
+  sliceEtudeByRanges,
   upperNoteCount,
   type MetronomeCursor,
 } from '../core/sor/engine';
@@ -28,6 +31,7 @@ import { waitForNextDownbeat } from '../core/audio/beat-cursor';
 import { ThemeService } from '../core/theme/theme.service';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
 import { EtudeStaffComponent } from '../notation/etude-staff.component';
+import { computeEtudeRowLayout } from '../notation/vexflow-render';
 
 const STORAGE_KEY = 'fretzone.sor.cfg.v1';
 
@@ -58,11 +62,22 @@ export class SorComponent implements OnDestroy {
   protected limitModeSig = signal<LimitMode>('iterations');
   protected practiceModeSig = signal<PracticeMode>('metronome');
   protected iterationReady = signal(false);
+  protected measureRanges = signal<MeasureRange[]>([]);
+  protected etudeIdSig = signal<string>('sor-op60-no1');
+  protected rangeStartSig = signal<number | null>(null);
+  protected rangeEndSig = signal<number | null>(null);
+  // Layout hints for the staff renderer; populated on Start from sliceEtudeByRanges.
+  protected barLabels = signal<number[] | null>(null);
+  protected sectionBreaks = signal<boolean[] | null>(null);
 
   private sessionTimeoutId: any = null;
   private det: { start: () => Promise<void>; stop: () => void } | null = null;
   private cursor: MetronomeCursor | null = null;
   private cancelDownbeatWait: (() => void) | null = null;
+  private staffScroll = viewChild<ElementRef<HTMLDivElement>>('staffScroll');
+  // Tracks the last row the auto page-flip animated to, so we don't fire a new
+  // scroll on every advance once we've already brought a row to the top.
+  private lastFlippedRow = -1;
 
   protected etudeTitle = computed(() => {
     const e = this.etude();
@@ -72,6 +87,26 @@ export class SorComponent implements OnDestroy {
   protected totalNotes = computed(() => {
     const e = this.etude();
     return e ? upperNoteCount(e) : 0;
+  });
+
+  // Bar count for the currently picked etude in the setup form. Drives the
+  // start/end input bounds and the "Selected N of M bars" hint.
+  protected setupBarCount = computed(() => {
+    const e = getEtudeById(this.etudeIdSig());
+    return e?.bars.length ?? 0;
+  });
+
+  protected selectedBarsCount = computed(() => {
+    const total = this.setupBarCount();
+    if (!total) return 0;
+    const seen = new Set<number>();
+    for (const r of this.measureRanges()) {
+      const start = Math.max(1, Math.min(total, r.start | 0));
+      const end = Math.max(1, Math.min(total, r.end | 0));
+      if (start > end) continue;
+      for (let m = start; m <= end; m++) seen.add(m);
+    }
+    return seen.size;
   });
 
   constructor() {
@@ -85,15 +120,21 @@ export class SorComponent implements OnDestroy {
       showTab: this.fb.nonNullable.control(initial.showTab),
       showLhFingerings: this.fb.nonNullable.control(initial.showLhFingerings),
       showRhFingerings: this.fb.nonNullable.control(initial.showRhFingerings),
+      autoScroll: this.fb.nonNullable.control(initial.autoScroll ?? true),
       iterations: this.fb.nonNullable.control(initial.iterations),
       limitMode: this.fb.nonNullable.control<LimitMode>(initial.limitMode),
       timeMinutes: this.fb.nonNullable.control(initial.timeMinutes),
       a4: this.fb.nonNullable.control(initial.a4),
       centsTolerance: this.fb.nonNullable.control(initial.centsTolerance),
+      rangeStart: this.fb.control<number | null>(null),
+      rangeEnd: this.fb.control<number | null>(null),
     });
 
     this.limitModeSig.set(this.form.controls.limitMode.value);
     this.practiceModeSig.set(this.form.controls.practiceMode.value);
+    this.etudeIdSig.set(this.form.controls.etudeId.value);
+    const initialRanges = Array.isArray(initial.measureRanges) ? initial.measureRanges : [];
+    this.measureRanges.set(this.normalizeRanges(initialRanges, getEtudeById(safeId)?.bars.length ?? 0));
 
     this.form.controls.limitMode.valueChanges
       .pipe(takeUntilDestroyed())
@@ -101,10 +142,86 @@ export class SorComponent implements OnDestroy {
     this.form.controls.practiceMode.valueChanges
       .pipe(takeUntilDestroyed())
       .subscribe(v => this.practiceModeSig.set(v));
+    this.form.controls.etudeId.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(v => {
+        this.etudeIdSig.set(v);
+        // Drop ranges so a stale selection from a different-length etude
+        // can't trigger out-of-range silence on the next Start.
+        this.measureRanges.set([]);
+        this.form.controls.rangeStart.setValue(null);
+        this.form.controls.rangeEnd.setValue(null);
+      });
+    this.form.controls.rangeStart.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(v => this.rangeStartSig.set(v));
+    this.form.controls.rangeEnd.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(v => this.rangeEndSig.set(v));
 
     this.form.valueChanges
       .pipe(takeUntilDestroyed())
       .subscribe(() => saveToStorage(STORAGE_KEY, this.formToConfig()));
+
+    // Persist whenever the measure-range list changes (it's outside the form).
+    effect(() => {
+      this.measureRanges();
+      saveToStorage(STORAGE_KEY, this.formToConfig());
+    });
+
+    // Auto page-flip — scrolls the staff panel when the playback cursor
+    // (metronome or mic) advances. Reads layout from the same helper the
+    // renderer uses so row Y positions stay in sync with what's drawn.
+    effect(() => this.maybeAutoScroll());
+  }
+
+  private normalizeRanges(ranges: MeasureRange[], total: number): MeasureRange[] {
+    if (!total) return [];
+    const out: MeasureRange[] = [];
+    for (const r of ranges) {
+      const start = Math.max(1, Math.min(total, r.start | 0));
+      const end = Math.max(1, Math.min(total, r.end | 0));
+      if (start > end) continue;
+      out.push({ start, end });
+    }
+    return out;
+  }
+
+  protected canAddRange = computed(() => {
+    const s = this.rangeStartSig();
+    const e = this.rangeEndSig();
+    const total = this.setupBarCount();
+    if (!total) return false;
+    if (s == null || e == null) return false;
+    if (!Number.isFinite(s) || !Number.isFinite(e)) return false;
+    if (s < 1 || e < 1) return false;
+    if (s > total || e > total) return false;
+    return s <= e;
+  });
+
+  protected addRange() {
+    const s = this.form.controls.rangeStart.value;
+    const e = this.form.controls.rangeEnd.value;
+    const total = this.setupBarCount();
+    if (s == null || e == null || !total) return;
+    const start = Math.max(1, Math.min(total, Math.trunc(s)));
+    const end = Math.max(1, Math.min(total, Math.trunc(e)));
+    if (start > end) return;
+    this.measureRanges.update(arr => [...arr, { start, end }]);
+    this.form.controls.rangeStart.setValue(null);
+    this.form.controls.rangeEnd.setValue(null);
+  }
+
+  protected removeRange(index: number) {
+    this.measureRanges.update(arr => arr.filter((_, i) => i !== index));
+  }
+
+  protected clearRanges() {
+    this.measureRanges.set([]);
+  }
+
+  protected rangeLabel(r: MeasureRange): string {
+    return r.start === r.end ? `${r.start}` : `${r.start}–${r.end}`;
   }
 
   ngOnDestroy(): void {
@@ -123,8 +240,15 @@ export class SorComponent implements OnDestroy {
       this.status.set('That etude has no notes yet — import it via MusicXML first.');
       return;
     }
+    const sliced = sliceEtudeByRanges(entry, c.measureRanges);
+    if (!sliced.etude.bars.length) {
+      this.status.set('No measures selected — pick a range or clear the list.');
+      return;
+    }
     this.cfg.set(c);
-    this.etude.set(entry);
+    this.etude.set(sliced.etude);
+    this.barLabels.set(sliced.originalBarNumbers);
+    this.sectionBreaks.set(sliced.sectionBreakBefore);
     this.playedCount.set(0);
     this.iterationIdx.set(1);
     this.heard.set('--');
@@ -239,7 +363,11 @@ export class SorComponent implements OnDestroy {
     if (!c || !e) return;
     this.tearDownDetection();
     const seq = flattenUpperVoice(e);
-    const midis = seq.map(n => n.midi);
+    // Chord tickables expose every stacked pitch as an alternative — landing
+    // mic detection on any one of them counts the position as played.
+    const midis = seq.map(n =>
+      n.chordMidis?.length ? [n.midi, ...n.chordMidis] : n.midi
+    );
     this.det = startMelodyDetection(
       this.service,
       { midis, a4: c.a4, centsTolerance: c.centsTolerance, requireFreshAttack },
@@ -331,12 +459,71 @@ export class SorComponent implements OnDestroy {
       showTab: !!v.showTab,
       showLhFingerings: !!v.showLhFingerings,
       showRhFingerings: !!v.showRhFingerings,
+      autoScroll: !!v.autoScroll,
       iterations: Math.max(1, v.iterations || 1),
       limitMode: v.limitMode === 'time' ? 'time' : 'iterations',
       timeMinutes: Math.min(60, Math.max(1, v.timeMinutes || 3)),
       a4: v.a4 || 440,
       centsTolerance: Math.min(50, Math.max(5, v.centsTolerance || 25)),
+      measureRanges: this.measureRanges(),
     };
+  }
+
+  // Page-flip when the active row reaches the bottom-most visible row in the
+  // staff panel. Computes row Y positions from the same layout helper the
+  // renderer uses, so the scroll target matches what's actually drawn.
+  private maybeAutoScroll() {
+    const playedCount = this.playedCount();
+    const cfg = this.cfg();
+    const e = this.etude();
+    const containerRef = this.staffScroll();
+    if (!cfg || !e || !containerRef) return;
+    const container = containerRef.nativeElement;
+
+    // Iteration just (re)started — drop the highlight to the top and reset
+    // the row tracker so the next flip fires correctly.
+    if (playedCount === 0) {
+      container.scrollTop = 0;
+      this.lastFlippedRow = -1;
+      return;
+    }
+
+    if (!cfg.autoScroll) return;
+
+    const barIdx = barIndexForUpperNote(e, playedCount - 1);
+    if (barIdx == null) return;
+
+    const layout = computeEtudeRowLayout(e.bars.length, {
+      barsPerRow: 4,
+      sectionBreaks: this.sectionBreaks(),
+      showTab: cfg.showTab,
+      showRhFingerings: cfg.showRhFingerings,
+    });
+    const rowIdx = layout.rows.findIndex(r => r.includes(barIdx));
+    if (rowIdx < 0) return;
+    if (rowIdx === this.lastFlippedRow) return;
+
+    // No next row → we're already in the final row; nothing more to flip to.
+    const nextRowYTop = layout.rowYTops[rowIdx + 1];
+    if (nextRowYTop == null) return;
+
+    const visTop = container.scrollTop;
+    const visBottom = visTop + container.clientHeight;
+    const rowYTop = layout.rowYTops[rowIdx];
+
+    // Flip when the active row is the bottom-most visible row. "Bottom-most"
+    // means there's nothing fully visible below it — the next row's top is at
+    // or beyond the viewport's bottom edge (or only a sliver is showing). This
+    // covers both fully-visible bottom rows and partially-clipped ones, so we
+    // flip before the user runs out of staff to read.
+    const epsilon = 4;
+    if (nextRowYTop < visBottom - epsilon) return;
+
+    container.scrollTo({
+      top: Math.max(0, rowYTop - layout.topPad / 2),
+      behavior: 'smooth',
+    });
+    this.lastFlippedRow = rowIdx;
   }
 
   protected etudeLabelOf(id: string): string {

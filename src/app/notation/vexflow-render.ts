@@ -46,6 +46,17 @@ function styleStave(stave: any, fg: string) {
   } catch {}
 }
 
+// MusicXML <repeat direction="forward|backward"/> → VexFlow repeat barlines.
+// Applied before draw() so the stave allocates space for the thick bar + dots.
+function applyRepeatBarlines(stave: any, bar: EtudeBar) {
+  const T = (Flow as any).Barline?.type;
+  if (!T) return;
+  try {
+    if (bar.startRepeat) stave.setBegBarType(T.REPEAT_BEGIN);
+    if (bar.endRepeat) stave.setEndBarType(T.REPEAT_END);
+  } catch {}
+}
+
 // Notehead + stem + flag are covered by StaveNote.setStyle, but accidentals
 // and fret-hand-finger badges are modifiers that need their own style call.
 function styleNote(note: any, fg: string) {
@@ -633,6 +644,12 @@ export interface EtudeRenderOptions {
   theme?: NotationTheme;
   // Max bars per row before wrapping. Default 4.
   barsPerRow?: number;
+  // Original 1-indexed measure number for each rendered bar (length === bars.length).
+  // When omitted, falls back to (bars index + 1).
+  barLabels?: number[] | null;
+  // When true at index i, force a row break BEFORE bar i so a non-adjacent
+  // section starts on its own line with a fresh clef/key/time lead-in.
+  sectionBreaks?: boolean[] | null;
 }
 
 interface BuiltEtudeNote {
@@ -663,6 +680,75 @@ function vfDuration(n: EtudeNote): string {
   const dotted = n.dotted ? 'd' : '';
   const rest = n.kind === 'rest' ? 'r' : '';
   return `${base}${dotted}${rest}`;
+}
+
+// Partition bar indices [0..barCount-1] into rows. A row breaks when it hits
+// `barsPerRow`, OR when `sectionBreaks[i]` is true at the next bar — the
+// latter keeps non-adjacent measure selections from rendering on one line.
+// Exported for unit testing — the slice flow (e.g., 2-4 + 8) hinges on this.
+export function buildEtudeRows(
+  barCount: number,
+  barsPerRow: number,
+  sectionBreaks: boolean[] | null | undefined,
+): number[][] {
+  const rows: number[][] = [];
+  const perRow = Math.max(1, barsPerRow);
+  let i = 0;
+  while (i < barCount) {
+    const row: number[] = [i];
+    i++;
+    while (i < barCount && row.length < perRow && !(sectionBreaks && sectionBreaks[i])) {
+      row.push(i);
+      i++;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+// Deterministic vertical layout shared by the renderer and the SOR auto
+// page-flip scroll logic. Pulled out so both call sites use one source of
+// truth for row Y positions and the SVG's total height.
+export interface EtudeRowLayout {
+  rows: number[][];        // bar indices per row (from buildEtudeRows)
+  rowYTops: number[];      // y-offset of each row's top in the SVG, parallel to `rows`
+  rowHeight: number;       // per-row vertical extent (treble + tab + clearance)
+  rowGap: number;          // vertical space between rows
+  topPad: number;          // padding above the first row
+  bottomPad: number;       // padding below the last row
+  totalHeight: number;     // SVG canvas height
+  trebleHeight: number;    // height of the treble stave within a row
+  tabGap: number;          // vertical gap between treble and tab staves
+}
+
+export interface EtudeRowLayoutOptions {
+  barsPerRow?: number;
+  sectionBreaks?: boolean[] | null;
+  showTab?: boolean;
+  showRhFingerings?: boolean;
+}
+
+export function computeEtudeRowLayout(
+  barCount: number,
+  opts: EtudeRowLayoutOptions = {},
+): EtudeRowLayout {
+  const barsPerRow = Math.max(1, opts.barsPerRow ?? 4);
+  const showTab = !!opts.showTab;
+  const showRh = !!opts.showRhFingerings;
+  const rows = buildEtudeRows(barCount, barsPerRow, opts.sectionBreaks ?? null);
+
+  const trebleHeight = 72;
+  const tabGap = 8;
+  const tabHeight = showTab ? 110 : 0;
+  const rowGap = 30;
+  const noTabClearance = showTab ? 0 : 40;
+  const topPad = 30 + (showRh ? 14 : 0);
+  const rowHeight = trebleHeight + tabGap + tabHeight + noTabClearance;
+  const bottomPad = showTab ? 20 : 40;
+  const rowYTops = rows.map((_, i) => topPad + i * (rowHeight + rowGap));
+  const totalHeight = topPad + rows.length * rowHeight + Math.max(0, rows.length - 1) * rowGap + bottomPad;
+
+  return { rows, rowYTops, rowHeight, rowGap, topPad, bottomPad, totalHeight, trebleHeight, tabGap };
 }
 
 export function renderEtudeEl(
@@ -702,23 +788,19 @@ export function renderEtudeEl(
   }
 
   // ── Layout math ──────────────────────────────────────────────────────────
-  const rows: EtudeBar[][] = [];
-  for (let i = 0; i < bars.length; i += barsPerRow) {
-    rows.push(bars.slice(i, i + barsPerRow));
-  }
-
-  // Per-row vertical block: treble (72) + optional tab (110 + 8 gap)
-  const trebleHeight = 72;
-  const tabGap = 8;
-  const tabHeight = showTab ? 110 : 0;
-  const rowGap = 30;
-  const noTabClearance = showTab ? 0 : 40;
-  // Extra headroom when RH fingerings are on so a TOP-justified annotation
-  // above high notes isn't clipped at the SVG top edge.
-  const topPad = 30 + (showRh ? 14 : 0);
-  const rowHeight = trebleHeight + tabGap + tabHeight + noTabClearance;
-  const bottomPad = showTab ? 20 : 40;
-  const height = topPad + rows.length * rowHeight + Math.max(0, rows.length - 1) * rowGap + bottomPad;
+  // Rows hold bar INDICES (into `bars`) so each row knows which original
+  // measure each slot maps to. Vertical layout (topPad, rowHeight, rowYTops)
+  // comes from computeEtudeRowLayout — the SOR component reads the same
+  // layout helper to drive auto page-flip scrolling, so the two stay in sync.
+  const sectionBreaks = opts.sectionBreaks ?? null;
+  const barLabels = opts.barLabels ?? null;
+  const layout = computeEtudeRowLayout(bars.length, {
+    barsPerRow,
+    sectionBreaks,
+    showTab,
+    showRhFingerings: showRh,
+  });
+  const { rows, rowYTops, totalHeight: height, trebleHeight, tabGap } = layout;
 
   const renderer = new Flow.Renderer(container as HTMLDivElement, Flow.Renderer.Backends.SVG);
   renderer.resize(requestedWidth, height);
@@ -848,29 +930,45 @@ export function renderEtudeEl(
   const totalAvailable = requestedWidth - 20;
 
   // ── Render bars row by row ───────────────────────────────────────────────
-  let barCursor = 0;
-  rows.forEach((rowBars, rowIdx) => {
-    const yTop = topPad + rowIdx * (rowHeight + rowGap);
-    const noteArea = (totalAvailable - leadWidth) / rowBars.length;
+  rows.forEach((rowIdxs, rowIdx) => {
+    const yTop = rowYTops[rowIdx];
+    const noteArea = (totalAvailable - leadWidth) / rowIdxs.length;
 
     let xCursor = 10;
-    rowBars.forEach((_bar, i) => {
+    rowIdxs.forEach((barIdx, i) => {
+      const bar = bars[barIdx];
       const staveWidth = i === 0 ? noteArea + leadWidth : noteArea;
-      const b = built[barCursor + i];
+      const b = built[barIdx];
 
       // Treble stave.
       const stave = new Flow.Stave(xCursor, yTop, staveWidth);
       if (i === 0) {
         stave.addClef('treble').addKeySignature(keySpec).addTimeSignature(timeSignature);
       }
+      applyRepeatBarlines(stave, bar);
       styleStave(stave, FG);
       stave.setContext(ctx).draw();
+
+      // Bar number label above the stave (original measure number when the
+      // staff is rendering a slice; otherwise its position in the etude).
+      const label = barLabels?.[barIdx] ?? (barIdx + 1);
+      try {
+        ctx.save();
+        ctx.setFont('Arial', 9, '');
+        try { (ctx as any).setFillStyle?.(FG); } catch {}
+        ctx.fillText(String(label), xCursor + (i === 0 ? leadWidth + 2 : 4), yTop - 6);
+        ctx.restore();
+      } catch {}
 
       // Tab stave.
       let tabStave: any = null;
       if (showTab) {
         tabStave = new Flow.TabStave(xCursor, yTop + trebleHeight + tabGap, staveWidth);
-        tabStave.addClef('tab').setNumLines(6);
+        tabStave.setNumLines(6);
+        if (i === 0) {
+          tabStave.addClef('tab');
+        }
+        applyRepeatBarlines(tabStave, bar);
         styleStave(tabStave, FG);
         tabStave.setContext(ctx).draw();
         tabStave.setNoteStartX(stave.getNoteStartX());
@@ -927,8 +1025,6 @@ export function renderEtudeEl(
 
       xCursor += staveWidth;
     });
-
-    barCursor += rowBars.length;
   });
 
   // Draw ties last so they sit on top of the staves and pick up any cross-bar
@@ -957,10 +1053,31 @@ function buildBuiltNote(
   if (src.kind === 'rest') {
     staveNote = new Flow.StaveNote({ keys: ['b/4'], duration: dur });
   } else {
-    const written = (src.midi ?? 60) + 12; // sounding → written (octave up)
-    const sp = keyAwareSpelling(written, tonic, mode, tonicOffset);
+    // Collect primary + chord pitches; sort ascending by midi so VexFlow draws
+    // the lowest at the bottom of the stack.
+    type Pitch = { midi: number; stringId?: number; fret?: number; lhFinger?: number | null };
+    const allPitches: Pitch[] = [
+      {
+        midi: src.midi ?? 60,
+        stringId: src.stringId,
+        fret: src.fret,
+        lhFinger: src.lhFinger ?? null,
+      },
+      ...(src.chord ?? []).map(p => ({
+        midi: p.midi,
+        stringId: p.stringId,
+        fret: p.fret,
+        lhFinger: p.lhFinger ?? null,
+      })),
+    ].sort((a, b) => a.midi - b.midi);
+
+    const keys = allPitches.map(p => {
+      const written = p.midi + 12; // sounding → written (octave up)
+      return keyAwareSpelling(written, tonic, mode, tonicOffset).key;
+    });
+
     staveNote = new Flow.StaveNote({
-      keys: [sp.key],
+      keys,
       duration: dur,
       clef: 'treble',
       stem_direction: stemDirection,
@@ -968,13 +1085,17 @@ function buildBuiltNote(
     if (src.dotted) {
       try { Flow.Dot.buildAndAttach([staveNote], { all: true }); } catch {}
     }
-    if (showLh && src.lhFinger != null && src.lhFinger >= 0) {
-      const fhf = new Flow.FretHandFinger(String(src.lhFinger));
-      try {
-        const pos = (Flow as any).Modifier?.Position?.BELOW;
-        if (pos != null) fhf.setPosition(pos);
-      } catch {}
-      staveNote.addModifier(fhf, 0);
+    if (showLh) {
+      allPitches.forEach((p, idx) => {
+        if (p.lhFinger != null && p.lhFinger >= 0) {
+          const fhf = new Flow.FretHandFinger(String(p.lhFinger));
+          try {
+            const pos = (Flow as any).Modifier?.Position?.BELOW;
+            if (pos != null) fhf.setPosition(pos);
+          } catch {}
+          staveNote.addModifier(fhf, idx);
+        }
+      });
     }
     if (showRh && src.rhFinger) {
       const ann = new Flow.Annotation(src.rhFinger);
@@ -989,10 +1110,13 @@ function buildBuiltNote(
 
   let tabNote: any | null = null;
   if (showTab && src.kind === 'note' && src.stringId != null && src.fret != null) {
-    tabNote = new Flow.TabNote({
-      positions: [{ str: src.stringId, fret: src.fret }],
-      duration: dur,
-    });
+    const positions = [
+      { str: src.stringId, fret: src.fret },
+      ...(src.chord ?? [])
+        .filter(p => p.stringId != null && p.fret != null)
+        .map(p => ({ str: p.stringId as number, fret: p.fret as number })),
+    ];
+    tabNote = new Flow.TabNote({ positions, duration: dur });
     if (src.dotted) {
       try { Flow.Dot.buildAndAttach([tabNote], { all: true }); } catch {}
     }

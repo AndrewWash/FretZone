@@ -24,9 +24,22 @@ export type RhFinger = 'p' | 'i' | 'm' | 'a';
 export type LhFinger = 0 | 1 | 2 | 3 | 4;
 export type StringId = 1 | 2 | 3 | 4 | 5 | 6;
 
+// One extra pitch stacked on top of an EtudeNote's primary pitch (chord). The
+// primary EtudeNote fields (midi/stringId/fret/lhFinger) describe the lowest
+// or melody pitch; entries in `chord` are additional pitches sounded on the
+// same beat. RH fingering applies to the whole chord and stays on the primary.
+export interface ChordPitch {
+  midi: number;
+  stringId: StringId;
+  fret: number;
+  lhFinger?: LhFinger | null;
+}
+
 // A single tickable in one voice of one bar. `kind` distinguishes rests from
 // notes; `tieToNext` joins two consecutive notes of the same pitch in the same
-// voice (can span bars — the renderer resolves cross-bar ties).
+// voice (can span bars — the renderer resolves cross-bar ties). `chord`
+// stacks additional simultaneous pitches on the same tickable; absent for
+// single-pitch notes.
 export interface EtudeNote {
   kind: 'note' | 'rest';
   duration: EtudeDuration;
@@ -37,13 +50,18 @@ export interface EtudeNote {
   lhFinger?: LhFinger | null;
   rhFinger?: RhFinger | null;
   tieToNext?: boolean;
+  chord?: ChordPitch[];
 }
 
 // One bar has two voices. `lower` is optional — single-voice passages put
-// everything in `upper` and leave `lower` empty.
+// everything in `upper` and leave `lower` empty. `startRepeat`/`endRepeat`
+// mirror MusicXML `<repeat direction="forward|backward"/>` barlines and tell
+// the renderer to draw repeat signs at the left/right edge of the bar.
 export interface EtudeBar {
   upper: EtudeNote[];
   lower: EtudeNote[];
+  startRepeat?: boolean;
+  endRepeat?: boolean;
 }
 
 export interface SorEtude {
@@ -66,6 +84,12 @@ export interface SorEtude {
 export type PracticeMode = 'mic' | 'metronome';
 export type LimitMode = 'iterations' | 'time';
 
+// Inclusive, 1-indexed measure range. `start === end` for a single-bar range.
+export interface MeasureRange {
+  start: number;
+  end: number;
+}
+
 export interface SorConfig {
   etudeId: string;
   practiceMode: PracticeMode;
@@ -77,6 +101,12 @@ export interface SorConfig {
   timeMinutes: number;
   a4: number;
   centsTolerance: number;
+  // Empty array means "play the whole etude" — preserves the original behavior
+  // for users who never touch the selection UI.
+  measureRanges: MeasureRange[];
+  // Auto page-flip: scroll the staff panel down when the playback cursor
+  // reaches the bottom-most visible row, so the user always has lookahead.
+  autoScroll: boolean;
 }
 
 export function defaultSorConfig(): SorConfig {
@@ -91,6 +121,8 @@ export function defaultSorConfig(): SorConfig {
     timeMinutes: 3,
     a4: 440,
     centsTolerance: 25,
+    measureRanges: [],
+    autoScroll: true,
   };
 }
 

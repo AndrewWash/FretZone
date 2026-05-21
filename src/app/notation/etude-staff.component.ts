@@ -16,6 +16,8 @@ export class EtudeStaffComponent {
   showLhFingerings = input<boolean>(false);
   showRhFingerings = input<boolean>(false);
   barsPerRow = input<number>(4);
+  barLabels = input<number[] | null>(null);
+  sectionBreaks = input<boolean[] | null>(null);
 
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private theme = inject(ThemeService);
@@ -28,6 +30,8 @@ export class EtudeStaffComponent {
         showLhFingerings: this.showLhFingerings(),
         showRhFingerings: this.showRhFingerings(),
         barsPerRow: this.barsPerRow(),
+        barLabels: this.barLabels(),
+        sectionBreaks: this.sectionBreaks(),
         theme: this.theme.notationTheme(),
       });
     });
