@@ -6,9 +6,16 @@ import { createBeatCursor, type BeatCursor } from '../audio/beat-cursor';
 // Used both for mic-based pitch matching and metronome-based cursor advance.
 export interface UpperNoteRef {
   midi: number;
-  index: number;        // 0-based position among non-rest upper notes
+  index: number;        // 0-based position in this sequence (expanded for repeats)
   beatOnset: number;    // cumulative quarter-note beats from piece start
   beats: number;        // note's own duration in beats (with dot)
+  // Physical bar this note lives in (0-based into `etude.bars`). With repeats
+  // expanded, the same bar can appear at several sequence positions.
+  barIndex: number;
+  // Index among non-rest upper notes in the *unexpanded* etude. Repeated notes
+  // share the physical index of their first occurrence — used to map the play
+  // cursor back onto the notes actually drawn on the staff.
+  physicalIndex: number;
   // Additional simultaneous pitches stacked on this tickable. Empty when the
   // tickable is a single-note. Mic detection treats any of `[midi, ...chordMidis]`
   // as a valid match for this position.
@@ -20,7 +27,8 @@ export function flattenUpperVoice(etude: SorEtude): UpperNoteRef[] {
   const beatsPerBar = ETUDE_BEATS_PER_BAR[etude.timeSignature];
   let idx = 0;
   let cursor = 0;
-  for (const bar of etude.bars) {
+  for (let barIndex = 0; barIndex < etude.bars.length; barIndex++) {
+    const bar = etude.bars[barIndex];
     let beat = cursor;
     for (const n of bar.upper) {
       const beats = noteBeats(n);
@@ -28,8 +36,88 @@ export function flattenUpperVoice(etude: SorEtude): UpperNoteRef[] {
         const chordMidis = n.chord?.length
           ? n.chord.map(c => c.midi)
           : undefined;
-        out.push({ midi: n.midi, index: idx, beatOnset: beat, beats, chordMidis });
+        out.push({
+          midi: n.midi,
+          index: idx,
+          beatOnset: beat,
+          beats,
+          barIndex,
+          physicalIndex: idx,
+          chordMidis,
+        });
         idx++;
+      }
+      beat += beats;
+    }
+    cursor += beatsPerBar;
+  }
+  return out;
+}
+
+// Physical bar play order with `startRepeat`/`endRepeat` barlines expanded.
+// A backward repeat with no matching forward repeat loops from bar 0 (standard
+// music behavior). Each backward repeat fires once, so the result is finite.
+// Example — Op. 60 No. 1 (endRepeat on m8/m16, startRepeat on m9):
+//   [0..7, 0..7, 8..15, 8..15]
+export function expandBarOrder(etude: SorEtude): number[] {
+  const out: number[] = [];
+  const n = etude.bars.length;
+  const taken = new Set<number>();
+  let repeatStart = 0;
+  for (let i = 0; i < n; i++) {
+    const bar = etude.bars[i];
+    if (bar.startRepeat) repeatStart = i;
+    out.push(i);
+    if (bar.endRepeat && !taken.has(i)) {
+      taken.add(i);
+      i = repeatStart - 1; // the loop's i++ lands back on repeatStart
+    }
+  }
+  return out;
+}
+
+// Index of the first non-rest upper note of each bar, in the unexpanded etude.
+function barPhysicalStarts(etude: SorEtude): number[] {
+  const starts: number[] = [];
+  let count = 0;
+  for (const bar of etude.bars) {
+    starts.push(count);
+    for (const n of bar.upper) if (n.kind === 'note' && n.midi != null) count++;
+  }
+  return starts;
+}
+
+// Expanded play sequence consumed by mic detection and the metronome cursor.
+// Walks `expandBarOrder` so repeats are played back; `beatOnset` accumulates
+// across the whole expanded timeline (stays monotonic for the beat cursor).
+export function flattenPlaySequence(etude: SorEtude): UpperNoteRef[] {
+  const out: UpperNoteRef[] = [];
+  const beatsPerBar = ETUDE_BEATS_PER_BAR[etude.timeSignature];
+  const physStarts = barPhysicalStarts(etude);
+  const order = expandBarOrder(etude);
+  let idx = 0;
+  let cursor = 0;
+  for (const barIndex of order) {
+    const bar = etude.bars[barIndex];
+    let beat = cursor;
+    let physInBar = 0;
+    for (const n of bar.upper) {
+      const beats = noteBeats(n);
+      if (n.kind === 'note' && n.midi != null) {
+        const chordMidis = n.chord?.length
+          ? n.chord.map(c => c.midi)
+          : undefined;
+        out.push({
+          midi: n.midi,
+          index: idx,
+          beatOnset: beat,
+          beats,
+          barIndex,
+          physicalIndex: physStarts[barIndex] + physInBar,
+          chordMidis,
+        });
+        idx++;
+        physInBar++;
       }
       beat += beats;
     }
@@ -82,11 +170,12 @@ export interface MetronomeCursorOpts {
 export type MetronomeCursor = BeatCursor;
 
 export function createMetronomeCursor(etude: SorEtude, opts: MetronomeCursorOpts): MetronomeCursor {
-  const seq = flattenUpperVoice(etude);
+  const seq = flattenPlaySequence(etude);
+  const beatsPerBar = ETUDE_BEATS_PER_BAR[etude.timeSignature];
   return createBeatCursor({
     bpm: opts.bpm,
     noteOnsets: seq.map(s => s.beatOnset),
-    totalBeats: totalBeats(etude),
+    totalBeats: expandBarOrder(etude).length * beatsPerBar,
     onAdvance: opts.onAdvance,
     onComplete: opts.onComplete,
   });
@@ -190,7 +279,14 @@ export function sliceEtudeByRanges(source: SorEtude, ranges: MeasureRange[]): Sl
     };
   }
 
-  const bars = picked.map(m => source.bars[m - 1]);
+  // Drop repeat barlines on a real slice — a selected range plays straight
+  // through once (use the Iterations setting for extra passes), and a dangling
+  // repeat sign on a sub-range would be misleading.
+  const bars = picked.map(m => ({
+    ...source.bars[m - 1],
+    startRepeat: false,
+    endRepeat: false,
+  }));
   const sectionBreakBefore = picked.map((m, i) => i > 0 && m !== picked[i - 1] + 1);
 
   return {

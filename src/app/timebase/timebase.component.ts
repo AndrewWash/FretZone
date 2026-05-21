@@ -5,6 +5,7 @@ import { FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule } f
 import { startWith } from 'rxjs/operators';
 import { MetronomeBarComponent } from '../core/audio/metronome-bar.component';
 import { MetronomeService } from '../core/audio/metronome.service';
+import { PracticeTimerService } from '../core/timer/practice-timer.service';
 
 interface FieldRow {
   main: string;
@@ -53,6 +54,8 @@ type ImageSlot = 'mainImage' | 'subImage';
 export class TimebaseComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private metronome = inject(MetronomeService);
+  private practiceTimer = inject(PracticeTimerService);
+  private runCounted = false;
 
   protected fieldsArr: FormArray<FieldGroup>;
   protected form;
@@ -152,6 +155,10 @@ export class TimebaseComponent implements OnDestroy {
     this.paused.set(false);
     this.metronome.resetForNewSession();
     this.phase.set('running');
+    if (!this.runCounted) {
+      this.runCounted = true;
+      this.practiceTimer.markRunStart();
+    }
     this.armTimer();
 
     queueMicrotask(() => this.runRoot()?.nativeElement.focus());
@@ -221,6 +228,10 @@ export class TimebaseComponent implements OnDestroy {
   }
 
   private cleanupRun(): void {
+    if (this.runCounted) {
+      this.runCounted = false;
+      this.practiceTimer.markRunEnd();
+    }
     this.disarmTimer();
     this.paused.set(false);
     this.metronome.stop();

@@ -7,6 +7,7 @@ import { AccidentalMode, BASE_LETTERS, BaseLetter, enharmonicDisplay } from '../
 import { allCandidates, defaultConfig, freqMatchesPrompt, randomPrompt } from '../core/quiz/engine';
 import type { LimitMode, Prompt, QuizConfig, StringId } from '../core/quiz/models';
 import { ThemeService } from '../core/theme/theme.service';
+import { PracticeTimerService } from '../core/timer/practice-timer.service';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
 import { TrebleNoteComponent } from '../notation/treble-note.component';
 
@@ -42,6 +43,8 @@ export class QuizComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private service = inject(PitchDetectService);
   protected theme = inject(ThemeService);
+  private practiceTimer = inject(PracticeTimerService);
+  private runCounted = false;
 
   protected baseLetters: BaseLetter[] = [...BASE_LETTERS];
 
@@ -154,6 +157,10 @@ export class QuizComponent implements OnDestroy {
     this.micStarted.set(false);
     this.endedByTimer.set(false);
     this.phase.set('running');
+    if (!this.runCounted) {
+      this.runCounted = true;
+      this.practiceTimer.markRunStart();
+    }
     this.nextPrompt();
     this.status.set('Press Start Mic to begin');
   }
@@ -298,6 +305,10 @@ export class QuizComponent implements OnDestroy {
   }
 
   private cleanupRun() {
+    if (this.runCounted) {
+      this.runCounted = false;
+      this.practiceTimer.markRunEnd();
+    }
     this.unsub?.();
     this.unsub = null;
     this.service.stop();

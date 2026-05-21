@@ -20,15 +20,15 @@ import {
   getEtudeById,
 } from '../core/sor/catalog';
 import {
-  barIndexForUpperNote,
   createMetronomeCursor,
-  flattenUpperVoice,
+  flattenPlaySequence,
   sliceEtudeByRanges,
-  upperNoteCount,
   type MetronomeCursor,
+  type UpperNoteRef,
 } from '../core/sor/engine';
 import { waitForNextDownbeat } from '../core/audio/beat-cursor';
 import { ThemeService } from '../core/theme/theme.service';
+import { PracticeTimerService } from '../core/timer/practice-timer.service';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
 import { EtudeStaffComponent } from '../notation/etude-staff.component';
 import { computeEtudeRowLayout } from '../notation/vexflow-render';
@@ -46,6 +46,8 @@ export class SorComponent implements OnDestroy {
   private service = inject(PitchDetectService);
   private metronome = inject(MetronomeService);
   protected theme = inject(ThemeService);
+  private practiceTimer = inject(PracticeTimerService);
+  private runCounted = false;
 
   protected etudes = SOR_ETUDES;
   protected form;
@@ -53,6 +55,9 @@ export class SorComponent implements OnDestroy {
   protected phase = signal<'setup' | 'running' | 'done'>('setup');
   protected cfg = signal<SorConfig | null>(null);
   protected etude = signal<SorEtude | null>(null);
+  // Expanded play sequence (repeats unrolled) — drives mic detection, the
+  // metronome cursor, the progress readout, and the highlight/scroll mapping.
+  protected playSeq = signal<UpperNoteRef[]>([]);
   protected playedCount = signal(0);
   protected iterationIdx = signal(1);
   protected heard = signal('--');
@@ -84,9 +89,17 @@ export class SorComponent implements OnDestroy {
     return e ? etudeLabel(e) : '';
   });
 
-  protected totalNotes = computed(() => {
-    const e = this.etude();
-    return e ? upperNoteCount(e) : 0;
+  protected totalNotes = computed(() => this.playSeq().length);
+
+  // Played-note count for the renderer/auto-scroll. `playedCount` indexes the
+  // expanded play sequence; the staff only draws each physical note once, so
+  // map back to the physical note index. Resets naturally when a repeat loops
+  // playback backward, so the dim highlight tracks the current pass.
+  protected highlightCount = computed(() => {
+    const pc = this.playedCount();
+    const seq = this.playSeq();
+    if (pc <= 0 || pc > seq.length) return 0;
+    return seq[pc - 1].physicalIndex + 1;
   });
 
   // Bar count for the currently picked etude in the setup form. Drives the
@@ -247,6 +260,7 @@ export class SorComponent implements OnDestroy {
     }
     this.cfg.set(c);
     this.etude.set(sliced.etude);
+    this.playSeq.set(flattenPlaySequence(sliced.etude));
     this.barLabels.set(sliced.originalBarNumbers);
     this.sectionBreaks.set(sliced.sectionBreakBefore);
     this.playedCount.set(0);
@@ -262,6 +276,10 @@ export class SorComponent implements OnDestroy {
     }
     this.metronome.resetForNewSession();
     this.phase.set('running');
+    if (!this.runCounted) {
+      this.runCounted = true;
+      this.practiceTimer.markRunStart();
+    }
   }
 
   private finishByTimer() {
@@ -362,7 +380,7 @@ export class SorComponent implements OnDestroy {
     const e = this.etude();
     if (!c || !e) return;
     this.tearDownDetection();
-    const seq = flattenUpperVoice(e);
+    const seq = this.playSeq();
     // Chord tickables expose every stacked pitch as an alternative — landing
     // mic detection on any one of them counts the position as played.
     const midis = seq.map(n =>
@@ -440,6 +458,10 @@ export class SorComponent implements OnDestroy {
   }
 
   private cleanupRun() {
+    if (this.runCounted) {
+      this.runCounted = false;
+      this.practiceTimer.markRunEnd();
+    }
     this.tearDownDetection();
     this.tearDownCursor();
     if (this.sessionTimeoutId != null) {
@@ -490,8 +512,12 @@ export class SorComponent implements OnDestroy {
 
     if (!cfg.autoScroll) return;
 
-    const barIdx = barIndexForUpperNote(e, playedCount - 1);
-    if (barIdx == null) return;
+    // Physical bar of the current cursor position. With repeats expanded the
+    // same bar recurs in the play sequence, so read the bar off the sequence
+    // entry rather than deriving it from a (now-ambiguous) note onset.
+    const seqRef = this.playSeq()[playedCount - 1];
+    if (!seqRef) return;
+    const barIdx = seqRef.barIndex;
 
     const layout = computeEtudeRowLayout(e.bars.length, {
       barsPerRow: 4,
@@ -503,20 +529,31 @@ export class SorComponent implements OnDestroy {
     if (rowIdx < 0) return;
     if (rowIdx === this.lastFlippedRow) return;
 
-    // No next row → we're already in the final row; nothing more to flip to.
-    const nextRowYTop = layout.rowYTops[rowIdx + 1];
-    if (nextRowYTop == null) return;
-
     const visTop = container.scrollTop;
     const visBottom = visTop + container.clientHeight;
     const rowYTop = layout.rowYTops[rowIdx];
+    const epsilon = 4;
+
+    // A repeat looped playback backward — the active row sits above the
+    // viewport. Scroll up to bring it back into view.
+    if (rowYTop < visTop - epsilon) {
+      container.scrollTo({
+        top: Math.max(0, rowYTop - layout.topPad / 2),
+        behavior: 'smooth',
+      });
+      this.lastFlippedRow = rowIdx;
+      return;
+    }
+
+    // No next row → we're already in the final row; nothing more to flip to.
+    const nextRowYTop = layout.rowYTops[rowIdx + 1];
+    if (nextRowYTop == null) return;
 
     // Flip when the active row is the bottom-most visible row. "Bottom-most"
     // means there's nothing fully visible below it — the next row's top is at
     // or beyond the viewport's bottom edge (or only a sliver is showing). This
     // covers both fully-visible bottom rows and partially-clipped ones, so we
     // flip before the user runs out of staff to read.
-    const epsilon = 4;
     if (nextRowYTop < visBottom - epsilon) return;
 
     container.scrollTo({
