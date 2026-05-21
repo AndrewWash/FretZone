@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { PitchDetectService } from '../core/audio/pitch-detect.service';
@@ -20,6 +20,7 @@ import {
   getEtudeById,
 } from '../core/sor/catalog';
 import {
+  barIndexForUpperNote,
   createMetronomeCursor,
   flattenUpperVoice,
   sliceEtudeByRanges,
@@ -30,6 +31,7 @@ import { waitForNextDownbeat } from '../core/audio/beat-cursor';
 import { ThemeService } from '../core/theme/theme.service';
 import { loadFromStorage, saveToStorage } from '../core/utils/storage';
 import { EtudeStaffComponent } from '../notation/etude-staff.component';
+import { computeEtudeRowLayout } from '../notation/vexflow-render';
 
 const STORAGE_KEY = 'fretzone.sor.cfg.v1';
 
@@ -72,6 +74,10 @@ export class SorComponent implements OnDestroy {
   private det: { start: () => Promise<void>; stop: () => void } | null = null;
   private cursor: MetronomeCursor | null = null;
   private cancelDownbeatWait: (() => void) | null = null;
+  private staffScroll = viewChild<ElementRef<HTMLDivElement>>('staffScroll');
+  // Tracks the last row the auto page-flip animated to, so we don't fire a new
+  // scroll on every advance once we've already brought a row to the top.
+  private lastFlippedRow = -1;
 
   protected etudeTitle = computed(() => {
     const e = this.etude();
@@ -114,6 +120,7 @@ export class SorComponent implements OnDestroy {
       showTab: this.fb.nonNullable.control(initial.showTab),
       showLhFingerings: this.fb.nonNullable.control(initial.showLhFingerings),
       showRhFingerings: this.fb.nonNullable.control(initial.showRhFingerings),
+      autoScroll: this.fb.nonNullable.control(initial.autoScroll ?? true),
       iterations: this.fb.nonNullable.control(initial.iterations),
       limitMode: this.fb.nonNullable.control<LimitMode>(initial.limitMode),
       timeMinutes: this.fb.nonNullable.control(initial.timeMinutes),
@@ -161,6 +168,11 @@ export class SorComponent implements OnDestroy {
       this.measureRanges();
       saveToStorage(STORAGE_KEY, this.formToConfig());
     });
+
+    // Auto page-flip — scrolls the staff panel when the playback cursor
+    // (metronome or mic) advances. Reads layout from the same helper the
+    // renderer uses so row Y positions stay in sync with what's drawn.
+    effect(() => this.maybeAutoScroll());
   }
 
   private normalizeRanges(ranges: MeasureRange[], total: number): MeasureRange[] {
@@ -351,7 +363,11 @@ export class SorComponent implements OnDestroy {
     if (!c || !e) return;
     this.tearDownDetection();
     const seq = flattenUpperVoice(e);
-    const midis = seq.map(n => n.midi);
+    // Chord tickables expose every stacked pitch as an alternative — landing
+    // mic detection on any one of them counts the position as played.
+    const midis = seq.map(n =>
+      n.chordMidis?.length ? [n.midi, ...n.chordMidis] : n.midi
+    );
     this.det = startMelodyDetection(
       this.service,
       { midis, a4: c.a4, centsTolerance: c.centsTolerance, requireFreshAttack },
@@ -443,6 +459,7 @@ export class SorComponent implements OnDestroy {
       showTab: !!v.showTab,
       showLhFingerings: !!v.showLhFingerings,
       showRhFingerings: !!v.showRhFingerings,
+      autoScroll: !!v.autoScroll,
       iterations: Math.max(1, v.iterations || 1),
       limitMode: v.limitMode === 'time' ? 'time' : 'iterations',
       timeMinutes: Math.min(60, Math.max(1, v.timeMinutes || 3)),
@@ -450,6 +467,63 @@ export class SorComponent implements OnDestroy {
       centsTolerance: Math.min(50, Math.max(5, v.centsTolerance || 25)),
       measureRanges: this.measureRanges(),
     };
+  }
+
+  // Page-flip when the active row reaches the bottom-most visible row in the
+  // staff panel. Computes row Y positions from the same layout helper the
+  // renderer uses, so the scroll target matches what's actually drawn.
+  private maybeAutoScroll() {
+    const playedCount = this.playedCount();
+    const cfg = this.cfg();
+    const e = this.etude();
+    const containerRef = this.staffScroll();
+    if (!cfg || !e || !containerRef) return;
+    const container = containerRef.nativeElement;
+
+    // Iteration just (re)started — drop the highlight to the top and reset
+    // the row tracker so the next flip fires correctly.
+    if (playedCount === 0) {
+      container.scrollTop = 0;
+      this.lastFlippedRow = -1;
+      return;
+    }
+
+    if (!cfg.autoScroll) return;
+
+    const barIdx = barIndexForUpperNote(e, playedCount - 1);
+    if (barIdx == null) return;
+
+    const layout = computeEtudeRowLayout(e.bars.length, {
+      barsPerRow: 4,
+      sectionBreaks: this.sectionBreaks(),
+      showTab: cfg.showTab,
+      showRhFingerings: cfg.showRhFingerings,
+    });
+    const rowIdx = layout.rows.findIndex(r => r.includes(barIdx));
+    if (rowIdx < 0) return;
+    if (rowIdx === this.lastFlippedRow) return;
+
+    // No next row → we're already in the final row; nothing more to flip to.
+    const nextRowYTop = layout.rowYTops[rowIdx + 1];
+    if (nextRowYTop == null) return;
+
+    const visTop = container.scrollTop;
+    const visBottom = visTop + container.clientHeight;
+    const rowYTop = layout.rowYTops[rowIdx];
+
+    // Flip when the active row is the bottom-most visible row. "Bottom-most"
+    // means there's nothing fully visible below it — the next row's top is at
+    // or beyond the viewport's bottom edge (or only a sliver is showing). This
+    // covers both fully-visible bottom rows and partially-clipped ones, so we
+    // flip before the user runs out of staff to read.
+    const epsilon = 4;
+    if (nextRowYTop < visBottom - epsilon) return;
+
+    container.scrollTo({
+      top: Math.max(0, rowYTop - layout.topPad / 2),
+      behavior: 'smooth',
+    });
+    this.lastFlippedRow = rowIdx;
   }
 
   protected etudeLabelOf(id: string): string {

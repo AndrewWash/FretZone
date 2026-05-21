@@ -706,6 +706,51 @@ export function buildEtudeRows(
   return rows;
 }
 
+// Deterministic vertical layout shared by the renderer and the SOR auto
+// page-flip scroll logic. Pulled out so both call sites use one source of
+// truth for row Y positions and the SVG's total height.
+export interface EtudeRowLayout {
+  rows: number[][];        // bar indices per row (from buildEtudeRows)
+  rowYTops: number[];      // y-offset of each row's top in the SVG, parallel to `rows`
+  rowHeight: number;       // per-row vertical extent (treble + tab + clearance)
+  rowGap: number;          // vertical space between rows
+  topPad: number;          // padding above the first row
+  bottomPad: number;       // padding below the last row
+  totalHeight: number;     // SVG canvas height
+  trebleHeight: number;    // height of the treble stave within a row
+  tabGap: number;          // vertical gap between treble and tab staves
+}
+
+export interface EtudeRowLayoutOptions {
+  barsPerRow?: number;
+  sectionBreaks?: boolean[] | null;
+  showTab?: boolean;
+  showRhFingerings?: boolean;
+}
+
+export function computeEtudeRowLayout(
+  barCount: number,
+  opts: EtudeRowLayoutOptions = {},
+): EtudeRowLayout {
+  const barsPerRow = Math.max(1, opts.barsPerRow ?? 4);
+  const showTab = !!opts.showTab;
+  const showRh = !!opts.showRhFingerings;
+  const rows = buildEtudeRows(barCount, barsPerRow, opts.sectionBreaks ?? null);
+
+  const trebleHeight = 72;
+  const tabGap = 8;
+  const tabHeight = showTab ? 110 : 0;
+  const rowGap = 30;
+  const noTabClearance = showTab ? 0 : 40;
+  const topPad = 30 + (showRh ? 14 : 0);
+  const rowHeight = trebleHeight + tabGap + tabHeight + noTabClearance;
+  const bottomPad = showTab ? 20 : 40;
+  const rowYTops = rows.map((_, i) => topPad + i * (rowHeight + rowGap));
+  const totalHeight = topPad + rows.length * rowHeight + Math.max(0, rows.length - 1) * rowGap + bottomPad;
+
+  return { rows, rowYTops, rowHeight, rowGap, topPad, bottomPad, totalHeight, trebleHeight, tabGap };
+}
+
 export function renderEtudeEl(
   container: HTMLElement,
   etude: SorEtude,
@@ -744,25 +789,18 @@ export function renderEtudeEl(
 
   // ── Layout math ──────────────────────────────────────────────────────────
   // Rows hold bar INDICES (into `bars`) so each row knows which original
-  // measure each slot maps to. A row break is forced either by hitting
-  // `barsPerRow` or by `sectionBreaks[i] === true` — the latter keeps
-  // non-adjacent measure selections from running together visually.
+  // measure each slot maps to. Vertical layout (topPad, rowHeight, rowYTops)
+  // comes from computeEtudeRowLayout — the SOR component reads the same
+  // layout helper to drive auto page-flip scrolling, so the two stay in sync.
   const sectionBreaks = opts.sectionBreaks ?? null;
   const barLabels = opts.barLabels ?? null;
-  const rows = buildEtudeRows(bars.length, barsPerRow, sectionBreaks);
-
-  // Per-row vertical block: treble (72) + optional tab (110 + 8 gap)
-  const trebleHeight = 72;
-  const tabGap = 8;
-  const tabHeight = showTab ? 110 : 0;
-  const rowGap = 30;
-  const noTabClearance = showTab ? 0 : 40;
-  // Extra headroom when RH fingerings are on so a TOP-justified annotation
-  // above high notes isn't clipped at the SVG top edge.
-  const topPad = 30 + (showRh ? 14 : 0);
-  const rowHeight = trebleHeight + tabGap + tabHeight + noTabClearance;
-  const bottomPad = showTab ? 20 : 40;
-  const height = topPad + rows.length * rowHeight + Math.max(0, rows.length - 1) * rowGap + bottomPad;
+  const layout = computeEtudeRowLayout(bars.length, {
+    barsPerRow,
+    sectionBreaks,
+    showTab,
+    showRhFingerings: showRh,
+  });
+  const { rows, rowYTops, totalHeight: height, trebleHeight, tabGap } = layout;
 
   const renderer = new Flow.Renderer(container as HTMLDivElement, Flow.Renderer.Backends.SVG);
   renderer.resize(requestedWidth, height);
@@ -893,7 +931,7 @@ export function renderEtudeEl(
 
   // ── Render bars row by row ───────────────────────────────────────────────
   rows.forEach((rowIdxs, rowIdx) => {
-    const yTop = topPad + rowIdx * (rowHeight + rowGap);
+    const yTop = rowYTops[rowIdx];
     const noteArea = (totalAvailable - leadWidth) / rowIdxs.length;
 
     let xCursor = 10;
@@ -926,7 +964,10 @@ export function renderEtudeEl(
       let tabStave: any = null;
       if (showTab) {
         tabStave = new Flow.TabStave(xCursor, yTop + trebleHeight + tabGap, staveWidth);
-        tabStave.addClef('tab').setNumLines(6);
+        tabStave.setNumLines(6);
+        if (i === 0) {
+          tabStave.addClef('tab');
+        }
         applyRepeatBarlines(tabStave, bar);
         styleStave(tabStave, FG);
         tabStave.setContext(ctx).draw();

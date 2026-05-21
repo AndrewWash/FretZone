@@ -1,8 +1,12 @@
 import { midiToFreq } from '../theory/note';
 import { PitchDetectService } from './pitch-detect.service';
 
+// Each position is either a single MIDI (regular note) or an array of MIDIs
+// (chord / multi-note — any of the pitches landing within tolerance counts).
+export type MelodyDetectTarget = number | number[];
+
 export interface MelodyDetectConfig {
-  midis: number[];          // sounding MIDIs in order
+  midis: MelodyDetectTarget[]; // sounding MIDIs in order; arrays = chord groups
   a4: number;
   centsTolerance: number;
   // When true, the first note is NOT armed at start. A tone left ringing from
@@ -45,14 +49,21 @@ export function startMelodyDetection(
   let lastAcceptedAt = Date.now();
   let completed = false;
 
-  const targets = cfg.midis.map(m => midiToFreq(m, cfg.a4));
+  // Normalize each position to an array of target frequencies. A single-pitch
+  // position becomes a 1-element array; chord positions become N-element. The
+  // detector then accepts a position when hz lands within tolerance of ANY of
+  // its targets — so a chord counts as "played" if even one of its pitches is
+  // detected on the mic.
+  const targetGroups: number[][] = cfg.midis.map(m =>
+    Array.isArray(m) ? m.map(x => midiToFreq(x, cfg.a4)) : [midiToFreq(m, cfg.a4)]
+  );
 
-  // Re-arm state. With requireFreshAttack the first note starts un-armed and
-  // the first target is seeded as the "just-accepted" note, so a leftover
-  // ringing tone is held off by the same gate that separates repeated notes.
+  // Re-arm state. With requireFreshAttack the first position starts un-armed
+  // and its target group is seeded as the "just-accepted" pitches, so a
+  // leftover ringing tone is held off by the same gate that separates repeats.
   let armed = !cfg.requireFreshAttack;
-  let acceptedTargetHz: number | null = cfg.requireFreshAttack
-    ? targets[0] ?? null
+  let acceptedTargetsHz: number[] | null = cfg.requireFreshAttack
+    ? targetGroups[0] ?? null
     : null;
   const rmsHistory: number[] = [];
 
@@ -60,6 +71,8 @@ export function startMelodyDetection(
     const cents = 1200 * Math.log2(hz / target);
     return Math.abs(cents) <= cfg.centsTolerance;
   };
+  const anyWithinTol = (hz: number, targets: number[]) =>
+    targets.some(t => withinTol(hz, t));
   const withinStability = (hz: number, ref: number) => {
     const cents = 1200 * Math.log2(hz / ref);
     return Math.abs(cents) <= STABILITY_CENTS;
@@ -83,16 +96,16 @@ export function startMelodyDetection(
 
     const now = Date.now();
     if (now - lastAcceptedAt < POST_NOTE_IGNORE_MS) return;
-    if (idx >= targets.length) return;
+    if (idx >= targetGroups.length) return;
 
     if (!armed) {
-      // Path A: pitch moved off the just-accepted note → next note is coming.
-      // Suppressed for the very first note under requireFreshAttack: there the
-      // gating note IS the first target, so a spurious decay-time pitch reading
-      // would arm the gate and let a tone left ringing from the previous
-      // iteration commit. Only a real re-attack (Path B) may start that note.
+      // Path A: pitch moved off ALL just-accepted pitches → next note is coming.
+      // Suppressed for the very first position under requireFreshAttack: there
+      // the gating pitches ARE the first targets, so a spurious decay-time
+      // reading would arm the gate and let a tone left ringing from the
+      // previous iteration commit. Only a real re-attack (Path B) may start it.
       const allowPathA = !(cfg.requireFreshAttack && idx === 0);
-      if (allowPathA && acceptedTargetHz != null && hz > 0 && !withinTol(hz, acceptedTargetHz)) {
+      if (allowPathA && acceptedTargetsHz != null && hz > 0 && !anyWithinTol(hz, acceptedTargetsHz)) {
         armed = true;
       }
       // Path B: amplitude evidence of a fresh strike.
@@ -107,9 +120,9 @@ export function startMelodyDetection(
 
     if (hz <= 0) return;
 
-    const target = targets[idx];
+    const group = targetGroups[idx];
 
-    if (withinTol(hz, target)) {
+    if (anyWithinTol(hz, group)) {
       if (holdStartAt == null) {
         holdStartAt = now;
         holdRefHz = hz;
@@ -127,10 +140,10 @@ export function startMelodyDetection(
         holdStartAt = null;
         holdRefHz = null;
         armed = false;
-        acceptedTargetHz = target;
+        acceptedTargetsHz = group;
         rmsHistory.length = 0;
         cbs.onNoteAccepted?.(acceptedIdx);
-        if (idx >= targets.length) {
+        if (idx >= targetGroups.length) {
           completed = true;
           cbs.onComplete?.();
         }

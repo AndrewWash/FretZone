@@ -9,6 +9,10 @@ export interface UpperNoteRef {
   index: number;        // 0-based position among non-rest upper notes
   beatOnset: number;    // cumulative quarter-note beats from piece start
   beats: number;        // note's own duration in beats (with dot)
+  // Additional simultaneous pitches stacked on this tickable. Empty when the
+  // tickable is a single-note. Mic detection treats any of `[midi, ...chordMidis]`
+  // as a valid match for this position.
+  chordMidis?: number[];
 }
 
 export function flattenUpperVoice(etude: SorEtude): UpperNoteRef[] {
@@ -21,7 +25,10 @@ export function flattenUpperVoice(etude: SorEtude): UpperNoteRef[] {
     for (const n of bar.upper) {
       const beats = noteBeats(n);
       if (n.kind === 'note' && n.midi != null) {
-        out.push({ midi: n.midi, index: idx, beatOnset: beat, beats });
+        const chordMidis = n.chord?.length
+          ? n.chord.map(c => c.midi)
+          : undefined;
+        out.push({ midi: n.midi, index: idx, beatOnset: beat, beats, chordMidis });
         idx++;
       }
       beat += beats;
@@ -29,6 +36,19 @@ export function flattenUpperVoice(etude: SorEtude): UpperNoteRef[] {
     cursor += beatsPerBar;
   }
   return out;
+}
+
+// Maps a flattened upper-voice index back to the bar it belongs to. Used by
+// the SOR auto page-flip effect to compute which row the playback cursor is
+// in. Returns null when the index is out of range.
+export function barIndexForUpperNote(etude: SorEtude, upperNoteIdx: number): number | null {
+  if (!Number.isFinite(upperNoteIdx) || upperNoteIdx < 0) return null;
+  const seq = flattenUpperVoice(etude);
+  if (upperNoteIdx >= seq.length) return null;
+  const beatsPerBar = ETUDE_BEATS_PER_BAR[etude.timeSignature];
+  const barIdx = Math.floor(seq[upperNoteIdx].beatOnset / beatsPerBar);
+  if (barIdx < 0 || barIdx >= etude.bars.length) return null;
+  return barIdx;
 }
 
 export function totalBeats(etude: SorEtude): number {

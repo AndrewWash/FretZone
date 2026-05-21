@@ -48,6 +48,9 @@
             <input type="checkbox" formControlName="showRhFingerings" /> Show RH fingerings
           </label>
           <label class="qz-opt-row">
+            <input type="checkbox" formControlName="autoScroll" /> Auto page-flip
+          </label>
+          <label class="qz-opt-row">
             <input type="checkbox"
                    [checked]="theme.notationTheme() === 'dark'"
                    (change)="theme.toggle()" />
@@ -162,7 +165,7 @@
 
     <app-metronome-bar />
 
-    <div class="mel-staff-wrap">
+    <div #staffScroll class="mel-staff-wrap">
       @if (etude(); as e) {
         <app-etude-staff
           [etude]="e"

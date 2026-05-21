@@ -254,6 +254,412 @@ export const SOR_OP60_NO1: SorEtude = {
     'Sor — 25 Progressive Studies, Op. 60, No. 1. Imported from MuseScore Studio export of the bundled beginner PDF (page 12). Public domain.',
 };
 
+// ── Op. 60 No. 2 ─────────────────────────────────────────────────────────────
+// Transcribed from `zMelodyHelper/sor/Op60_2.musicxml` (MuseScore Studio 4.6.5
+// export). C major, 3/4, 40 bars. Single-voice throughout except the closing
+// cadence (m38–m40) which adds an independent bass line in `lower`.
+// Chromatic colour: C# (m8, m28), F# (m21), G# (m34).
+
+const OP60_NO2_BARS: EtudeBar[] = [
+  // m1
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+      n({ s: 2, f: 1, d: 'q', lh: 1 }),  // C4
+    ],
+    lower: [],
+  },
+  // m2
+  {
+    upper: [
+      n({ s: 2, f: 1, d: 'q', lh: 1 }),  // C4
+      n({ s: 2, f: 0, d: '8' }),         // B3
+      n({ s: 2, f: 1, d: '8', lh: 1 }),  // C4
+      n({ s: 2, f: 3, d: 'q', lh: 4 }),  // D4
+    ],
+    lower: [],
+  },
+  // m3
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 1, f: 1, d: 'q', lh: 1 }),  // F4
+      n({ s: 2, f: 3, d: 'q', lh: 4 }),  // D4
+    ],
+    lower: [],
+  },
+  // m4
+  {
+    upper: [
+      n({ s: 2, f: 3, d: 'q', lh: 3 }),  // D4
+      n({ s: 2, f: 1, d: '8', lh: 1 }),  // C4
+      n({ s: 2, f: 3, d: '8', lh: 4 }),  // D4
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+    ],
+    lower: [],
+  },
+  // m5
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 2, f: 1, d: 'q', lh: 1 }),  // C4
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+    ],
+    lower: [],
+  },
+  // m6
+  {
+    upper: [
+      n({ s: 1, f: 3, d: 'q', lh: 4 }),  // G4
+      n({ s: 1, f: 1, d: 'q', lh: 1 }),  // F4
+      n({ s: 2, f: 3, d: '8', lh: 4 }),  // D4
+      n({ s: 2, f: 0, d: '8' }),         // B3
+    ],
+    lower: [],
+  },
+  // m7
+  {
+    upper: [
+      n({ s: 2, f: 1, d: 'q', lh: 1 }),  // C4
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+    ],
+    lower: [],
+  },
+  // m8 — chromatic C# resolves down to natural C
+  {
+    upper: [
+      n({ s: 2, f: 2, d: 'q', lh: 2 }),  // C#4
+      n({ s: 2, f: 3, d: '8', lh: 4 }),  // D4
+      n({ s: 2, f: 1, d: '8', lh: 1 }),  // C4
+      n({ s: 2, f: 0, d: '8' }),         // B3
+      n({ s: 3, f: 2, d: '8', lh: 2 }),  // A3
+    ],
+    lower: [],
+  },
+  // m9
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+      n({ s: 2, f: 1, d: 'q', lh: 1 }),  // C4
+    ],
+    lower: [],
+  },
+  // m10
+  {
+    upper: [
+      n({ s: 2, f: 1, d: 'q', lh: 1 }),  // C4
+      n({ s: 2, f: 0, d: '8' }),         // B3
+      n({ s: 2, f: 1, d: '8', lh: 1 }),  // C4
+      n({ s: 2, f: 3, d: 'q', lh: 4 }),  // D4
+    ],
+    lower: [],
+  },
+  // m11
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 1, f: 1, d: 'q', lh: 1 }),  // F4
+      n({ s: 2, f: 3, d: 'q', lh: 4 }),  // D4
+    ],
+    lower: [],
+  },
+  // m12
+  {
+    upper: [
+      n({ s: 2, f: 3, d: 'q', lh: 3 }),  // D4
+      n({ s: 2, f: 1, d: '8', lh: 1 }),  // C4
+      n({ s: 2, f: 3, d: '8', lh: 4 }),  // D4
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+    ],
+    lower: [],
+  },
+  // m13
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 2, f: 1, d: 'q', lh: 1 }),  // C4
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+    ],
+    lower: [],
+  },
+  // m14
+  {
+    upper: [
+      n({ s: 1, f: 3, d: 'q', lh: 4 }),  // G4
+      n({ s: 1, f: 1, d: 'q', lh: 1 }),  // F4
+      n({ s: 2, f: 3, d: 'q', lh: 4 }),  // D4
+    ],
+    lower: [],
+  },
+  // m15
+  {
+    upper: [
+      n({ s: 2, f: 1, d: '8', lh: 1 }),  // C4
+      n({ s: 3, f: 0, d: '8' }),         // G3
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+      n({ s: 2, f: 3, d: '8', lh: 4 }),  // D4
+      n({ s: 2, f: 0, d: '8' }),         // B3
+    ],
+    lower: [],
+  },
+  // m16 — low C3 punctuates the cadence
+  {
+    upper: [
+      n({ s: 2, f: 1, d: 'q', lh: 1 }),  // C4
+      n({ s: 5, f: 3, d: 'q', lh: 3 }),  // C3
+      rest('q'),
+    ],
+    lower: [],
+  },
+  // m17
+  {
+    upper: [
+      n({ s: 2, f: 0, d: 'q' }),         // B3
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 2, f: 3, d: 'q', lh: 4 }),  // D4
+    ],
+    lower: [],
+  },
+  // m18
+  {
+    upper: [
+      n({ s: 2, f: 1, d: 'h', lh: 1 }),  // C4
+      n({ s: 3, f: 2, d: 'q', lh: 2 }),  // A3
+    ],
+    lower: [],
+  },
+  // m19
+  {
+    upper: [
+      n({ s: 4, f: 0, d: 'q' }),         // D3
+      n({ s: 3, f: 2, d: 'q', lh: 2 }),  // A3
+      n({ s: 2, f: 1, d: 'q', lh: 1 }),  // C4
+    ],
+    lower: [],
+  },
+  // m20
+  {
+    upper: [
+      n({ s: 2, f: 0, d: 'h' }),         // B3
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+    ],
+    lower: [],
+  },
+  // m21 — chromatic F# then natural F
+  {
+    upper: [
+      n({ s: 1, f: 3, d: 'q', lh: 4 }),  // G4
+      n({ s: 1, f: 2, d: 'q', lh: 2 }),  // F#4
+      n({ s: 1, f: 1, d: 'q', lh: 1 }),  // F4
+    ],
+    lower: [],
+  },
+  // m22
+  {
+    upper: [
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+      n({ s: 2, f: 1, d: 'q', lh: 1 }),  // C4
+      n({ s: 3, f: 2, d: 'q', lh: 2 }),  // A3
+    ],
+    lower: [],
+  },
+  // m23
+  {
+    upper: [
+      n({ s: 2, f: 0, d: '8' }),         // B3
+      n({ s: 4, f: 0, d: '8' }),         // D3
+      n({ s: 2, f: 3, d: 'q', lh: 4 }),  // D4
+      n({ s: 2, f: 1, d: '8', lh: 1 }),  // C4
+      n({ s: 3, f: 2, d: '8', lh: 2 }),  // A3
+    ],
+    lower: [],
+  },
+  // m24 — low G2 punctuation, mirrors m16
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 6, f: 3, d: 'q', lh: 3 }),  // G2
+      rest('q'),
+    ],
+    lower: [],
+  },
+  // m25
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 2, f: 0, d: 'q' }),         // B3
+      n({ s: 2, f: 3, d: 'q', lh: 4 }),  // D4
+    ],
+    lower: [],
+  },
+  // m26
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 2, f: 1, d: 'q', lh: 1 }),  // C4
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+    ],
+    lower: [],
+  },
+  // m27
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 1, f: 1, d: 'q', lh: 1 }),  // F4
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+    ],
+    lower: [],
+  },
+  // m28
+  {
+    upper: [
+      n({ s: 2, f: 3, d: '8', lh: 4 }),  // D4
+      n({ s: 2, f: 2, d: '8', lh: 2 }),  // C#4
+      n({ s: 2, f: 3, d: '8', lh: 4 }),  // D4
+      n({ s: 2, f: 0, d: '8' }),         // B3
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+    ],
+    lower: [],
+  },
+  // m29
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 2, f: 0, d: '8' }),         // B3
+      n({ s: 2, f: 1, d: '8', lh: 1 }),  // C4
+      n({ s: 2, f: 3, d: 'q', lh: 4 }),  // D4
+    ],
+    lower: [],
+  },
+  // m30
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 2, f: 1, d: '8', lh: 1 }),  // C4
+      n({ s: 2, f: 3, d: '8', lh: 3 }),  // D4
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+    ],
+    lower: [],
+  },
+  // m31
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 2, f: 3, d: '8', lh: 3 }),  // D4
+      n({ s: 1, f: 1, d: '8', lh: 1 }),  // F4
+      n({ s: 1, f: 0, d: '8' }),         // E4
+      n({ s: 2, f: 1, d: '8', lh: 1 }),  // C4
+    ],
+    lower: [],
+  },
+  // m32
+  {
+    upper: [
+      n({ s: 2, f: 3, d: 'h', lh: 3 }),  // D4
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+    ],
+    lower: [],
+  },
+  // m33
+  {
+    upper: [
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+      n({ s: 2, f: 3, d: 'q', lh: 3 }),  // D4
+      n({ s: 2, f: 1, d: 'q', lh: 1 }),  // C4
+    ],
+    lower: [],
+  },
+  // m34 — chromatic G# leading tone into A
+  {
+    upper: [
+      n({ s: 2, f: 0, d: 'q' }),         // B3
+      n({ s: 3, f: 1, d: 'q', lh: 1 }),  // G#3
+      n({ s: 3, f: 2, d: 'q', lh: 2 }),  // A3
+    ],
+    lower: [],
+  },
+  // m35
+  {
+    upper: [
+      n({ s: 1, f: 1, d: 'q', lh: 1 }),  // F4
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+      n({ s: 2, f: 3, d: 'q', lh: 3 }),  // D4
+    ],
+    lower: [],
+  },
+  // m36
+  {
+    upper: [
+      n({ s: 2, f: 1, d: 'h', lh: 1 }),  // C4
+      n({ s: 2, f: 0, d: 'q' }),         // B3
+    ],
+    lower: [],
+  },
+  // m37
+  {
+    upper: [
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+      n({ s: 1, f: 3, d: 'q', lh: 3 }),  // G4
+      n({ s: 1, f: 1, d: 'q', lh: 1 }),  // F4
+    ],
+    lower: [],
+  },
+  // m38 — final cadence opens; melody on top, ascending bass line C–D–E below
+  {
+    upper: [
+      n({ s: 1, f: 0, d: 'q' }),         // E4
+      n({ s: 2, f: 0, d: 'q' }),         // B3
+      n({ s: 2, f: 1, d: 'q', lh: 1 }),  // C4
+    ],
+    lower: [
+      n({ s: 5, f: 3, d: 'q', lh: 3 }),  // C3
+      n({ s: 4, f: 0, d: 'q' }),         // D3
+      n({ s: 4, f: 2, d: 'q', lh: 2 }),  // E3
+    ],
+  },
+  // m39 — bass holds F3 across the bar
+  {
+    upper: [
+      n({ s: 2, f: 3, d: 'q', lh: 3 }),  // D4
+      n({ s: 3, f: 2, d: 'q', lh: 2 }),  // A3
+      n({ s: 2, f: 0, d: 'q' }),         // B3
+    ],
+    lower: [
+      n({ s: 4, f: 3, d: 'h', lh: 3 }),  // F3
+      n({ s: 3, f: 0, d: 'q' }),         // G3
+    ],
+  },
+  // m40 — final tonic resolution (source closes with a light-heavy barline)
+  {
+    upper: [
+      n({ s: 2, f: 1, d: 'h', lh: 1 }),  // C4
+      rest('q'),
+    ],
+    lower: [
+      n({ s: 5, f: 3, d: 'h', lh: 3 }),  // C3
+      rest('q'),
+    ],
+  },
+];
+
+export const SOR_OP60_NO2: SorEtude = {
+  id: 'sor-op60-no2',
+  opus: 60,
+  number: 2,
+  title: 'Op. 60 No. 2',
+  key: 'C',
+  keyMode: 'Ionian',
+  timeSignature: '3/4',
+  defaultBpm: 72,
+  bars: OP60_NO2_BARS,
+  enabled: true,
+  attribution:
+    'Sor — 25 Progressive Studies, Op. 60, No. 2. Transcribed from MuseScore Studio export. Public domain.',
+};
+
 // Future etudes — registered but disabled so the UI can show the full Op. 60
 // roster as a roadmap. Add bars + flip `enabled` to publish one.
 function stub(num: number): SorEtude {
@@ -273,7 +679,8 @@ function stub(num: number): SorEtude {
 
 export const SOR_ETUDES: SorEtude[] = [
   SOR_OP60_NO1,
-  ...Array.from({ length: 24 }, (_, i) => stub(i + 2)),
+  SOR_OP60_NO2,
+  ...Array.from({ length: 23 }, (_, i) => stub(i + 3)),
 ];
 
 export function getEtudeById(id: string): SorEtude | undefined {

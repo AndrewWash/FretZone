@@ -889,6 +889,9 @@ label { display: inline-flex; align-items: center; gap: 0.45rem; }
   justify-content: center;
   padding: 1.75rem 1.25rem 0.5rem;
   background: var(--fz-s1);
+  max-height: min(60vh, 640px);
+  overflow-y: auto;
+  scroll-behavior: smooth;
 }
 
 .mel-staff-host {

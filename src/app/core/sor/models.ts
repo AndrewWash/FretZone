@@ -104,6 +104,9 @@ export interface SorConfig {
   // Empty array means "play the whole etude" — preserves the original behavior
   // for users who never touch the selection UI.
   measureRanges: MeasureRange[];
+  // Auto page-flip: scroll the staff panel down when the playback cursor
+  // reaches the bottom-most visible row, so the user always has lookahead.
+  autoScroll: boolean;
 }
 
 export function defaultSorConfig(): SorConfig {
@@ -119,6 +122,7 @@ export function defaultSorConfig(): SorConfig {
     a4: 440,
     centsTolerance: 25,
     measureRanges: [],
+    autoScroll: true,
   };
 }
 
