@@ -83,6 +83,17 @@ export class SorComponent implements OnDestroy {
   // Tracks the last row the auto page-flip animated to, so we don't fire a new
   // scroll on every advance once we've already brought a row to the top.
   private lastFlippedRow = -1;
+  private resizeRaf: number | null = null;
+  // Re-evaluate the page-flip when the window resizes — the number of staff
+  // rows that fit changes, so the cursor's row may need to be brought back
+  // into view. rAF-coalesced so a drag-resize doesn't thrash scrollTo.
+  private onResize = () => {
+    if (this.resizeRaf != null) return;
+    this.resizeRaf = requestAnimationFrame(() => {
+      this.resizeRaf = null;
+      this.maybeAutoScroll();
+    });
+  };
 
   protected etudeTitle = computed(() => {
     const e = this.etude();
@@ -186,6 +197,7 @@ export class SorComponent implements OnDestroy {
     // (metronome or mic) advances. Reads layout from the same helper the
     // renderer uses so row Y positions stay in sync with what's drawn.
     effect(() => this.maybeAutoScroll());
+    window.addEventListener('resize', this.onResize, { passive: true });
   }
 
   private normalizeRanges(ranges: MeasureRange[], total: number): MeasureRange[] {
@@ -238,6 +250,8 @@ export class SorComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    window.removeEventListener('resize', this.onResize);
+    if (this.resizeRaf != null) cancelAnimationFrame(this.resizeRaf);
     this.cleanupRun();
   }
 
@@ -491,9 +505,18 @@ export class SorComponent implements OnDestroy {
     };
   }
 
-  // Page-flip when the active row reaches the bottom-most visible row in the
-  // staff panel. Computes row Y positions from the same layout helper the
-  // renderer uses, so the scroll target matches what's actually drawn.
+  // Page-flip the staff panel as the playback cursor advances, bringing the
+  // line the player is reaching the end of up to the top so fresh staff is
+  // always ahead. The trigger adapts to how many rows the *current* viewport
+  // fully fits — so it behaves on a wide desktop window, a short one, or a
+  // phone:
+  //   • 2+ full rows  → flip when the cursor reaches the 2nd measure of the
+  //     last fully-visible row; that row becomes the new top row.
+  //   • 0–1 full rows → flip only once the cursor finishes the active row (its
+  //     last note), bringing the next row to the top (one line per page).
+  // Row geometry comes from the same layout helper the renderer uses, mapped
+  // through the SVG's live on-screen position + scale, so it stays correct
+  // even when the staff is offset by container padding or CSS-scaled to fit.
   private maybeAutoScroll() {
     const playedCount = this.playedCount();
     const cfg = this.cfg();
@@ -512,55 +535,92 @@ export class SorComponent implements OnDestroy {
 
     if (!cfg.autoScroll) return;
 
-    // Physical bar of the current cursor position. With repeats expanded the
-    // same bar recurs in the play sequence, so read the bar off the sequence
-    // entry rather than deriving it from a (now-ambiguous) note onset.
-    const seqRef = this.playSeq()[playedCount - 1];
+    // Current cursor bar. With repeats expanded the same bar recurs in the play
+    // sequence, so read it off the sequence entry rather than a note onset.
+    const seq = this.playSeq();
+    const seqRef = seq[playedCount - 1];
     if (!seqRef) return;
     const barIdx = seqRef.barIndex;
 
     const layout = computeEtudeRowLayout(e.bars.length, {
-      barsPerRow: 4,
+      barsPerRow: 4, // matches renderEtudeEl / etude-staff default — keep in sync
       sectionBreaks: this.sectionBreaks(),
       showTab: cfg.showTab,
       showRhFingerings: cfg.showRhFingerings,
     });
-    const rowIdx = layout.rows.findIndex(r => r.includes(barIdx));
-    if (rowIdx < 0) return;
-    if (rowIdx === this.lastFlippedRow) return;
+    const rowCount = layout.rows.length;
+    const rowOf = (bar: number) => layout.rows.findIndex(r => r.includes(bar));
+    const activeRow = rowOf(barIdx);
+    if (activeRow < 0) return;
+
+    // Map the renderer's internal SVG coordinates into the container's scroll
+    // coordinate space. The staff SVG sits below the container's padding and
+    // may be CSS-scaled on a narrow viewport — fold both in (svgTop offset and
+    // scale factor) or the row math drifts on anything but a wide window.
+    const svg = container.querySelector('svg');
+    if (!svg) return;
+    const cRect = container.getBoundingClientRect();
+    const sRect = svg.getBoundingClientRect();
+    const scale = sRect.height / Math.max(1, layout.totalHeight);
+    const svgTop = sRect.top - cRect.top + container.scrollTop;
+    const rowTopPx = (r: number) => svgTop + layout.rowYTops[r] * scale;
+    const rowBottomPx = (r: number) =>
+      svgTop + (layout.rowYTops[r] + layout.rowHeight) * scale;
+    // Scroll offset that pins row r just below the viewport's top edge.
+    const topForRow = (r: number) =>
+      Math.max(0, rowTopPx(r) - layout.topPad * scale * 0.5);
 
     const visTop = container.scrollTop;
     const visBottom = visTop + container.clientHeight;
-    const rowYTop = layout.rowYTops[rowIdx];
-    const epsilon = 4;
+    const epsilon = 8;
 
-    // A repeat looped playback backward — the active row sits above the
-    // viewport. Scroll up to bring it back into view.
-    if (rowYTop < visTop - epsilon) {
-      container.scrollTo({
-        top: Math.max(0, rowYTop - layout.topPad / 2),
-        behavior: 'smooth',
-      });
-      this.lastFlippedRow = rowIdx;
+    // Cursor scrolled out of view above the viewport (a repeat looped back) —
+    // bring its row home and re-arm forward flips from there.
+    if (rowTopPx(activeRow) < visTop - epsilon) {
+      container.scrollTo({ top: topForRow(activeRow), behavior: 'smooth' });
+      this.lastFlippedRow = activeRow;
       return;
     }
 
-    // No next row → we're already in the final row; nothing more to flip to.
-    const nextRowYTop = layout.rowYTops[rowIdx + 1];
-    if (nextRowYTop == null) return;
+    // Rows fully inside the viewport right now.
+    let firstFull = -1;
+    let lastFull = -1;
+    for (let r = 0; r < rowCount; r++) {
+      if (rowTopPx(r) >= visTop - epsilon && rowBottomPx(r) <= visBottom + epsilon) {
+        if (firstFull < 0) firstFull = r;
+        lastFull = r;
+      }
+    }
 
-    // Flip when the active row is the bottom-most visible row. "Bottom-most"
-    // means there's nothing fully visible below it — the next row's top is at
-    // or beyond the viewport's bottom edge (or only a sliver is showing). This
-    // covers both fully-visible bottom rows and partially-clipped ones, so we
-    // flip before the user runs out of staff to read.
-    if (nextRowYTop < visBottom - epsilon) return;
+    // Pick the row to bring to the top, and the moment to do it.
+    let targetRow: number;
+    if (lastFull < 0 || firstFull === lastFull) {
+      // 0–1 fully-visible rows — flip only once the cursor finishes the active
+      // row (its last note), bringing the next row up to the top.
+      const nextRef = seq[playedCount]; // next note in the play sequence
+      if (!nextRef) return;             // last note of the run — nothing to flip
+      const nextRow = rowOf(nextRef.barIndex);
+      if (nextRow <= activeRow) return; // still mid-row (or a repeat) — wait
+      targetRow = nextRow;
+    } else {
+      // 2+ fully-visible rows — flip when the cursor reaches the 2nd measure of
+      // the last fully-visible row. If that's already the final row the run's
+      // end is in view, so there's nothing left to flip to.
+      if (lastFull >= rowCount - 1) return;
+      targetRow = lastFull;
+      if (activeRow < targetRow) return;
+      const rowBars = layout.rows[targetRow];
+      const triggerBar = rowBars[1] ?? rowBars[0]; // 2nd measure (1st if single-bar)
+      if (barIdx < triggerBar) return;
+    }
 
-    container.scrollTo({
-      top: Math.max(0, rowYTop - layout.topPad / 2),
-      behavior: 'smooth',
-    });
-    this.lastFlippedRow = rowIdx;
+    // Dedup: flip forward only, once per target row. The strict check also
+    // absorbs the smooth-scroll latency window, during which container.scrollTop
+    // is briefly stale and would otherwise re-fire the same flip.
+    if (targetRow <= this.lastFlippedRow) return;
+
+    container.scrollTo({ top: topForRow(targetRow), behavior: 'smooth' });
+    this.lastFlippedRow = targetRow;
   }
 
   protected etudeLabelOf(id: string): string {
