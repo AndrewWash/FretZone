@@ -740,8 +740,10 @@ export function computeEtudeRowLayout(
   const trebleHeight = 72;
   const tabGap = 8;
   const tabHeight = showTab ? 110 : 0;
-  const rowGap = 30;
-  const noTabClearance = showTab ? 0 : 40;
+  const rowGap = 18;
+  // Clearance below a treble-only row: enough to clear low-E ledger lines
+  // without leaving a wide empty band between systems.
+  const noTabClearance = showTab ? 0 : 22;
   const topPad = 30 + (showRh ? 14 : 0);
   const rowHeight = trebleHeight + tabGap + tabHeight + noTabClearance;
   const bottomPad = showTab ? 20 : 40;
@@ -949,14 +951,18 @@ export function renderEtudeEl(
       styleStave(stave, FG);
       stave.setContext(ctx).draw();
 
-      // Bar number label above the stave (original measure number when the
-      // staff is rendering a slice; otherwise its position in the etude).
+      // Bar number label at the top-left of the measure (original measure
+      // number when rendering a slice; otherwise its position in the etude).
+      // Sits just inside the left barline, a hair above the top staff line.
       const label = barLabels?.[barIdx] ?? (barIdx + 1);
       try {
         ctx.save();
         ctx.setFont('Arial', 9, '');
         try { (ctx as any).setFillStyle?.(FG); } catch {}
-        ctx.fillText(String(label), xCursor + (i === 0 ? leadWidth + 2 : 4), yTop - 6);
+        const labelX = xCursor + (i === 0 ? leadWidth + 2 : 3);
+        let labelY = yTop - 4;
+        try { labelY = stave.getYForLine(0) - 4; } catch {}
+        ctx.fillText(String(label), labelX, labelY);
         ctx.restore();
       } catch {}
 
