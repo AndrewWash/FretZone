@@ -190,6 +190,10 @@ export interface MelodyRenderOptions {
   mode?: ModeName;
   theme?: NotationTheme;
   timeSignature?: TimeSignature;
+  // Optional second voice (bass), parallel to `bars`. When present, rendered
+  // on the same staff with stems-down. Length must match `bars.length` or it's
+  // ignored.
+  bassBars?: MelodyTickable[][];
 }
 
 export function renderMelodyEl(
@@ -226,15 +230,20 @@ export function renderMelodyEl(
   ctx.setFont('Arial', 10, '').setBackgroundFillStyle(BG);
   try { (ctx as any).setFillStyle?.(FG); (ctx as any).setStrokeStyle?.(FG); } catch {}
 
-  const buildVoice = (ticks: MelodyTickable[]) => {
-    const notes = ticks.map(t => toMelodyStaveNote(t, tonic, mode));
+  const buildVoice = (ticks: MelodyTickable[], stemDirection: 1 | -1 = 1) => {
+    const notes = ticks.map(t => toMelodyStaveNote(t, tonic, mode, stemDirection));
     const voice = new Flow.Voice({ num_beats: beatsPerBar, beat_value: 4 });
     voice.setMode(Flow.Voice.Mode.SOFT);
     voice.addTickables(notes);
     return { voice, notes };
   };
 
-  const allVoices = bars.map(b => buildVoice(b));
+  const allVoices = bars.map(b => buildVoice(b, 1));
+
+  const hasBass = !!opts.bassBars && opts.bassBars.length === bars.length;
+  const allBassVoices = hasBass
+    ? opts.bassBars!.map(b => buildVoice(b, -1))
+    : [];
 
   // Auto-place accidentals based on key signature: in-scale notes get no
   // glyph (key sig handles them); out-of-scale chromatics get an explicit
@@ -242,10 +251,18 @@ export function renderMelodyEl(
   try {
     Flow.Accidental.applyAccidentals(allVoices.map(v => v.voice), keySpec);
   } catch {}
+  if (hasBass) {
+    try {
+      Flow.Accidental.applyAccidentals(allBassVoices.map(v => v.voice), keySpec);
+    } catch {}
+  }
 
   // Paint un-dimmed notes in the theme's foreground color. applyAccidentals
   // may have added new modifiers, so styling has to happen AFTER that pass.
   for (const v of allVoices) {
+    for (const n of v.notes) styleNote(n, FG);
+  }
+  for (const v of allBassVoices) {
     for (const n of v.notes) styleNote(n, FG);
   }
 
@@ -279,11 +296,14 @@ export function renderMelodyEl(
     }
   };
 
-  const formatBar = (voice: any, stave: any, noteRegionWidth: number) => {
+  const formatBar = (voice: any, bassVoice: any | null, stave: any, noteRegionWidth: number) => {
     const formatter = new Flow.Formatter();
     formatter.joinVoices([voice]);
-    formatter.format([voice], Math.max(40, noteRegionWidth - 20));
+    if (bassVoice) formatter.joinVoices([bassVoice]);
+    const voices = bassVoice ? [voice, bassVoice] : [voice];
+    formatter.format(voices, Math.max(40, noteRegionWidth - 20));
     voice.draw(ctx, stave);
+    if (bassVoice) bassVoice.draw(ctx, stave);
   };
 
   // Probe the actual leading-symbol width (clef + key sig + time sig) for
@@ -306,6 +326,9 @@ export function renderMelodyEl(
   let voiceCursor = 0;
   rows.forEach((rowBars, rowIdx) => {
     const rowVoices = allVoices.slice(voiceCursor, voiceCursor + rowBars.length);
+    const rowBassVoices = hasBass
+      ? allBassVoices.slice(voiceCursor, voiceCursor + rowBars.length)
+      : [];
     const noteArea = (totalAvailable - leadWidth) / rowBars.length;
 
     const yTop = topPad + rowIdx * rowHeight;
@@ -320,7 +343,8 @@ export function renderMelodyEl(
       stave.setContext(ctx).draw();
       dimNotes(rv.notes, rowBars[i]);
       const beams = buildBeams(rv.notes, rowBars[i]);
-      formatBar(rv.voice, stave, noteArea);
+      const bassVoice = rowBassVoices[i]?.voice ?? null;
+      formatBar(rv.voice, bassVoice, stave, noteArea);
       beams.forEach(b => {
         try { b.setStyle({ fillStyle: FG, strokeStyle: FG }); } catch {}
         b.setContext(ctx).draw();
@@ -331,7 +355,12 @@ export function renderMelodyEl(
   });
 }
 
-function toMelodyStaveNote(t: MelodyTickable, tonic: BaseLetter, mode: ModeName) {
+function toMelodyStaveNote(
+  t: MelodyTickable,
+  tonic: BaseLetter,
+  mode: ModeName,
+  stemDirection: 1 | -1 = 1,
+) {
   if (t.kind === 'rest') {
     // VexFlow names rests by appending 'r' to the duration code (e.g. 'qr',
     // '8r'). 'b/4' positions the rest glyph at staff middle, which VexFlow
@@ -342,7 +371,12 @@ function toMelodyStaveNote(t: MelodyTickable, tonic: BaseLetter, mode: ModeName)
   const sp = keyAwareSpelling(writtenMidi, tonic, mode);
   // No manual addModifier — Flow.Accidental.applyAccidentals at the voice
   // level decides which glyphs to draw vs. let the key signature speak.
-  return new Flow.StaveNote({ keys: [sp.key], duration: t.duration, clef: 'treble' });
+  return new Flow.StaveNote({
+    keys: [sp.key],
+    duration: t.duration,
+    clef: 'treble',
+    stem_direction: stemDirection,
+  });
 }
 
 // ── Scale renderer ────────────────────────────────────────────────────────

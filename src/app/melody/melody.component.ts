@@ -22,16 +22,20 @@ import type {
   LimitMode,
   MelodyConfig,
   MelodyPhrase,
+  MelodyTickable,
   PhraseBarCount,
   PracticeMode,
   ProgressionMode,
   TickDuration,
   TimeSignature,
 } from '../core/melody/models';
+import { planBass } from '../core/melody/bass-planner';
+import { romanNumeralsFor } from '../core/melody/harmony-planner';
 import { waitForNextDownbeat, type BeatCursor } from '../core/audio/beat-cursor';
 import {
   ALL_NOTE_DURATIONS,
   ALL_REST_DURATIONS,
+  BEATS_PER_BAR,
   PHRASE_BAR_OPTIONS,
   TIME_SIGNATURE_OPTIONS,
 } from '../core/melody/models';
@@ -65,6 +69,7 @@ interface MelodyFormValue {
   a4: number;
   centsTolerance: number;
   progression: ProgressionMode;
+  bassVoiceEnabled: boolean;
   allowedNoteValues: boolean[];
   allowRests: boolean;
   allowedRestValues: boolean[];
@@ -120,7 +125,24 @@ export class MelodyComponent implements OnDestroy {
   protected difficultySig = signal<Difficulty>('Easy');
   protected allowRestsSig = signal(true);
   protected practiceModeSig = signal<PracticeMode>('mic');
+  protected progressionSig = signal<ProgressionMode>('Off');
   protected iterationReady = signal(false);
+
+  protected bassAllowed = computed(() => this.progressionSig() !== 'Off');
+
+  protected bassBars = computed<MelodyTickable[][] | null>(() => {
+    const ph = this.phrase();
+    const c = this.cfg();
+    if (!c || !ph || !c.bassVoiceEnabled || !ph.harmony) return null;
+    return planBass(ph.harmony, c, BEATS_PER_BAR[ph.timeSignature]);
+  });
+
+  protected romanLine = computed(() => {
+    const ph = this.phrase();
+    const c = this.cfg();
+    if (!ph?.harmony || !c) return '';
+    return romanNumeralsFor(ph.harmony.chordsByBar, c.mode).join(' – ');
+  });
 
   // Wider staff when bars-per-row goes up so each bar still has room.
   // 8 and 16-bar phrases wrap at 4 bars/row, so they share the 4-bar width.
@@ -186,6 +208,7 @@ export class MelodyComponent implements OnDestroy {
       a4: this.fb.nonNullable.control(initial.a4),
       centsTolerance: this.fb.nonNullable.control(initial.centsTolerance),
       progression: this.fb.nonNullable.control<ProgressionMode>(initial.progression),
+      bassVoiceEnabled: this.fb.nonNullable.control(initial.bassVoiceEnabled ?? false),
       allowedNoteValues: this.noteValuesArr,
       allowRests: this.fb.nonNullable.control(initialCustom.allowRests),
       allowedRestValues: this.restValuesArr,
@@ -198,6 +221,12 @@ export class MelodyComponent implements OnDestroy {
     this.difficultySig.set(this.form.controls.difficulty.value);
     this.allowRestsSig.set(this.form.controls.allowRests.value);
     this.practiceModeSig.set(this.form.controls.practiceMode.value);
+    this.progressionSig.set(this.form.controls.progression.value);
+    // Initialize disabled state for the bass toggle based on progression.
+    if (this.form.controls.progression.value === 'Off') {
+      this.form.controls.bassVoiceEnabled.setValue(false, { emitEvent: false });
+      this.form.controls.bassVoiceEnabled.disable({ emitEvent: false });
+    }
 
     this.form.controls.limitMode.valueChanges
       .pipe(takeUntilDestroyed())
@@ -211,6 +240,18 @@ export class MelodyComponent implements OnDestroy {
     this.form.controls.practiceMode.valueChanges
       .pipe(takeUntilDestroyed())
       .subscribe(v => this.practiceModeSig.set(v));
+    this.form.controls.progression.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(v => {
+        this.progressionSig.set(v);
+        const bass = this.form.controls.bassVoiceEnabled;
+        if (v === 'Off') {
+          bass.setValue(false, { emitEvent: false });
+          bass.disable({ emitEvent: false });
+        } else if (bass.disabled) {
+          bass.enable({ emitEvent: false });
+        }
+      });
 
     this.form.valueChanges
       .pipe(takeUntilDestroyed())
@@ -515,6 +556,7 @@ export class MelodyComponent implements OnDestroy {
       a4: v.a4 || 440,
       centsTolerance: Math.min(50, Math.max(5, v.centsTolerance || 25)),
       progression: v.progression,
+      bassVoiceEnabled: v.progression === 'Off' ? false : !!v.bassVoiceEnabled,
       custom: {
         allowedNoteValues: allowedNoteValues.length ? [...allowedNoteValues] : ['q'],
         allowRests: v.allowRests,
