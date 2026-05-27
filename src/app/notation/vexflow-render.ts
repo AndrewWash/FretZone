@@ -10,7 +10,7 @@ import type {
   EtudeTimeSignature,
   SorEtude,
 } from '../core/sor/models';
-import { ETUDE_BEATS_PER_BAR, noteBeats } from '../core/sor/models';
+import { ETUDE_BEATS_PER_BAR, barBeats, noteBeats } from '../core/sor/models';
 
 export type NotationTheme = 'light' | 'dark';
 
@@ -852,6 +852,7 @@ export function renderEtudeEl(
   let beatCursor = 0;
   const built: BuiltBar[] = bars.map(bar => {
     const beatStart = beatCursor;
+    const voiceBeats = barBeats(bar, beatsPerBar);
 
     // Upper voice — stems up, default direction.
     const upper = bar.upper.map(src => buildBuiltNote(
@@ -881,14 +882,16 @@ export function renderEtudeEl(
     }
 
     // Bar uses quarter-note beat value internally; convert dotted-eighth-based
-    // meters (3/8, 6/8) to quarter beats via ETUDE_BEATS_PER_BAR.
-    const upperVoice = new Flow.Voice({ num_beats: beatsPerBar, beat_value: 4 });
+    // meters (3/8, 6/8) to quarter beats via ETUDE_BEATS_PER_BAR. Pickup bars
+    // get their actual note-sum as `num_beats` so VexFlow doesn't pad the
+    // tickable timeline with phantom space at the right edge.
+    const upperVoice = new Flow.Voice({ num_beats: voiceBeats, beat_value: 4 });
     upperVoice.setMode(Flow.Voice.Mode.SOFT);
     upperVoice.addTickables(upper.map(b => b.staveNote));
 
     let lowerVoice: any = null;
     if (lower.length) {
-      lowerVoice = new Flow.Voice({ num_beats: beatsPerBar, beat_value: 4 });
+      lowerVoice = new Flow.Voice({ num_beats: voiceBeats, beat_value: 4 });
       lowerVoice.setMode(Flow.Voice.Mode.SOFT);
       lowerVoice.addTickables(lower.map(b => b.staveNote));
     }
@@ -908,19 +911,19 @@ export function renderEtudeEl(
     if (showTab) {
       const upperTabs = upper.map(b => b.tabNote).filter(Boolean);
       if (upperTabs.length) {
-        upperTabVoice = new Flow.Voice({ num_beats: beatsPerBar, beat_value: 4 });
+        upperTabVoice = new Flow.Voice({ num_beats: voiceBeats, beat_value: 4 });
         upperTabVoice.setMode(Flow.Voice.Mode.SOFT);
         upperTabVoice.addTickables(upperTabs);
       }
       const lowerTabs = lower.map(b => b.tabNote).filter(Boolean);
       if (lowerTabs.length) {
-        lowerTabVoice = new Flow.Voice({ num_beats: beatsPerBar, beat_value: 4 });
+        lowerTabVoice = new Flow.Voice({ num_beats: voiceBeats, beat_value: 4 });
         lowerTabVoice.setMode(Flow.Voice.Mode.SOFT);
         lowerTabVoice.addTickables(lowerTabs);
       }
     }
 
-    beatCursor = beatStart + beatsPerBar;
+    beatCursor = beatStart + voiceBeats;
 
     return { upper, lower, upperVoice, lowerVoice, upperTabVoice, lowerTabVoice, beatStart };
   });
@@ -966,9 +969,13 @@ export function renderEtudeEl(
   const totalAvailable = requestedWidth - 20;
 
   // ── Render bars row by row ───────────────────────────────────────────────
+  // Per-bar width comes from the FULL row size (barsPerRow), not the actual
+  // count in this row. A short final row (e.g. 2 bars when barsPerRow is 4)
+  // would otherwise stretch each bar to half the canvas — the rests then look
+  // gaping. Sizing by barsPerRow leaves whitespace at the right edge instead.
   rows.forEach((rowIdxs, rowIdx) => {
     const yTop = rowYTops[rowIdx];
-    const noteArea = (totalAvailable - leadWidth) / rowIdxs.length;
+    const noteArea = (totalAvailable - leadWidth) / barsPerRow;
 
     let xCursor = 10;
     rowIdxs.forEach((barIdx, i) => {
@@ -1174,30 +1181,68 @@ function findFirstInNextBar(built: BuiltBar[], barIdx: number, voice: 'upper' | 
   return null;
 }
 
-// Walk built bars and beam runs of eighths-or-shorter notes within a single
-// voice. Beams reset across the end of each run, on rests, and on duration
-// boundaries (e.g. a quarter inside a run of eighths splits the beam).
-function buildEtudeBeams(arr: BuiltEtudeNote[]): any[] {
-  if (!arr.length) return [];
-  const beamables: any[][] = [];
-  let cur: any[] = [];
+// Partition a single voice's notes into beam groups, by index. Rules:
+//   1. Only notes with duration 8/16/32 are eligible; rests and longer notes
+//      flush the current group.
+//   2. A dotted-8 immediately followed by an undotted 16 forms its own 2-note
+//      beam — the canonical dotted-rhythm figure. Surrounding 8ths must not
+//      be lumped into the same beam as that 16.
+//   3. Otherwise a beam group continues only while duration AND dotted-ness
+//      match (so plain-8 runs beam together, plain-16 runs beam together,
+//      but a duration or dotted change splits).
+// Singletons are returned in the output so the result fully describes the
+// grouping decision; the caller drops length<1 groups before building Beams.
+export function computeBeamGroupIndices(sources: EtudeNote[]): number[][] {
+  const groups: number[][] = [];
+  let cur: number[] = [];
   const flush = () => {
-    if (cur.length >= 2) beamables.push(cur);
+    if (cur.length) groups.push(cur);
     cur = [];
   };
-  for (const b of arr) {
-    const d = b.source.duration;
+  let i = 0;
+  while (i < sources.length) {
+    const s = sources[i];
+    const d = s.duration;
     const isShort = d === '8' || d === '16' || d === '32';
-    if (b.source.kind === 'note' && isShort) {
-      cur.push(b.staveNote);
-    } else {
+    if (s.kind !== 'note' || !isShort) {
       flush();
+      i++;
+      continue;
     }
+    const next = sources[i + 1];
+    if (
+      s.dotted && d === '8' &&
+      next && next.kind === 'note' && next.duration === '16' && !next.dotted
+    ) {
+      flush();
+      groups.push([i, i + 1]);
+      i += 2;
+      continue;
+    }
+    const prevIdx = cur.length ? cur[cur.length - 1] : -1;
+    if (prevIdx >= 0) {
+      const prev = sources[prevIdx];
+      if (prev.duration !== d || !!prev.dotted !== !!s.dotted) flush();
+    }
+    cur.push(i);
+    i++;
   }
   flush();
+  return groups;
+}
+
+// Walk built bars and beam runs of eighths-or-shorter notes within a single
+// voice. Delegates the grouping decision to computeBeamGroupIndices so the
+// rule set is testable in isolation; this wrapper just maps indices back to
+// StaveNotes and constructs the VexFlow Beams.
+function buildEtudeBeams(arr: BuiltEtudeNote[]): any[] {
+  if (!arr.length) return [];
+  const groups = computeBeamGroupIndices(arr.map(b => b.source));
   const beams: any[] = [];
-  for (const group of beamables) {
-    try { beams.push(new Flow.Beam(group)); } catch {}
+  for (const group of groups) {
+    if (group.length < 2) continue;
+    const notes = group.map(i => arr[i].staveNote);
+    try { beams.push(new Flow.Beam(notes)); } catch {}
   }
   return beams;
 }

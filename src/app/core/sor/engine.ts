@@ -1,5 +1,5 @@
 import type { EtudeNote, MeasureRange, SorEtude } from './models';
-import { ETUDE_BEATS_PER_BAR, noteBeats } from './models';
+import { ETUDE_BEATS_PER_BAR, barBeats, noteBeats } from './models';
 import { createBeatCursor, type BeatCursor } from '../audio/beat-cursor';
 
 // Flattened upper-voice play sequence — what the player is "reading along" to.
@@ -49,7 +49,7 @@ export function flattenUpperVoice(etude: SorEtude): UpperNoteRef[] {
       }
       beat += beats;
     }
-    cursor += beatsPerBar;
+    cursor += barBeats(bar, beatsPerBar);
   }
   return out;
 }
@@ -121,7 +121,7 @@ export function flattenPlaySequence(etude: SorEtude): UpperNoteRef[] {
       }
       beat += beats;
     }
-    cursor += beatsPerBar;
+    cursor += barBeats(bar, beatsPerBar);
   }
   return out;
 }
@@ -134,14 +134,19 @@ export function barIndexForUpperNote(etude: SorEtude, upperNoteIdx: number): num
   const seq = flattenUpperVoice(etude);
   if (upperNoteIdx >= seq.length) return null;
   const beatsPerBar = ETUDE_BEATS_PER_BAR[etude.timeSignature];
-  const barIdx = Math.floor(seq[upperNoteIdx].beatOnset / beatsPerBar);
-  if (barIdx < 0 || barIdx >= etude.bars.length) return null;
-  return barIdx;
+  const noteBeat = seq[upperNoteIdx].beatOnset;
+  let acc = 0;
+  for (let i = 0; i < etude.bars.length; i++) {
+    const len = barBeats(etude.bars[i], beatsPerBar);
+    if (noteBeat < acc + len) return i;
+    acc += len;
+  }
+  return null;
 }
 
 export function totalBeats(etude: SorEtude): number {
   const beatsPerBar = ETUDE_BEATS_PER_BAR[etude.timeSignature];
-  return etude.bars.length * beatsPerBar;
+  return etude.bars.reduce((s, b) => s + barBeats(b, beatsPerBar), 0);
 }
 
 // Total non-rest upper-voice note count — used for "Notes: 3 / 24" readouts.
@@ -172,10 +177,12 @@ export type MetronomeCursor = BeatCursor;
 export function createMetronomeCursor(etude: SorEtude, opts: MetronomeCursorOpts): MetronomeCursor {
   const seq = flattenPlaySequence(etude);
   const beatsPerBar = ETUDE_BEATS_PER_BAR[etude.timeSignature];
+  const expandedTotal = expandBarOrder(etude)
+    .reduce((s, barIdx) => s + barBeats(etude.bars[barIdx], beatsPerBar), 0);
   return createBeatCursor({
     bpm: opts.bpm,
     noteOnsets: seq.map(s => s.beatOnset),
-    totalBeats: expandBarOrder(etude).length * beatsPerBar,
+    totalBeats: expandedTotal,
     onAdvance: opts.onAdvance,
     onComplete: opts.onComplete,
   });
