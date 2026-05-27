@@ -100,6 +100,13 @@
               <input type="radio" formControlName="progression" [value]="p" /> {{ progressionLabel(p) }}
             </label>
           }
+          <label class="qz-opt-row" [class.qz-opt-disabled]="!bassAllowed()">
+            <input type="checkbox" formControlName="bassVoiceEnabled" />
+            Bass voice (Easy = roots, Intermediate = root + 5th, Expert = walking line)
+          </label>
+          @if (!bassAllowed()) {
+            <p class="qz-field-hint">Bass voice needs a chord progression — set it to On or Random.</p>
+          }
         </div>
         <div>
           <span id="ml-lbl-opts" class="qz-field-lbl">Audio</span>
@@ -241,8 +248,12 @@
 
     <div class="mel-staff-wrap">
       @if (phrase(); as ph) {
+        @if (ph.harmony && romanLine()) {
+          <div class="mel-chords" aria-label="Chord progression">{{ romanLine() }}</div>
+        }
         <app-melody-staff
           [bars]="ph.bars"
+          [bassBars]="bassBars()"
           [playedCount]="playedCount()"
           [tonic]="c.tonic"
           [mode]="c.mode"

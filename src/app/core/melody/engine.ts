@@ -1,7 +1,7 @@
 import { BASE_LETTERS } from '../theory/note';
 import { planContour } from './contour-planner';
 import { planForm } from './form-planner';
-import { planHarmony } from './harmony-planner';
+import { planHarmony, type HarmonyPlan } from './harmony-planner';
 import { planRhythm, type RhythmSlot } from './rhythm-planner';
 import { planPitches, type TierLimits } from './pitch-planner';
 import { playablePool } from './engine-pool';
@@ -52,6 +52,7 @@ export function defaultConfig(): MelodyConfig {
     a4: 440,
     centsTolerance: 25,
     progression: 'Off',
+    bassVoiceEnabled: false,
     custom: defaultCustomOptions(),
     practiceMode: 'mic',
   };
@@ -104,7 +105,7 @@ export function generatePhrase(cfg: MelodyConfig): MelodyPhrase {
     pitches = randomWalk(pool, slots.filter(s => !s.isRest).length, limits);
   }
 
-  return assemblePhrase(slots, pitches, barCount, beatsPerBar, timeSignature);
+  return assemblePhrase(slots, pitches, barCount, beatsPerBar, timeSignature, harmony);
 }
 
 function randomWalk(
@@ -133,6 +134,7 @@ function assemblePhrase(
   barCount: PhraseBarCount,
   beatsPerBar: number,
   timeSignature: TimeSignature,
+  harmony: HarmonyPlan | null,
 ): MelodyPhrase {
   const tickables: MelodyTickable[] = [];
   let pIdx = 0;
@@ -150,7 +152,7 @@ function assemblePhrase(
     bars.push(tickables.filter(t => t.beat >= lo && t.beat < hi));
   }
   const noteMidis = tickables.filter(t => t.kind === 'note').map(t => t.midi!);
-  return { tickables, bars, noteMidis, timeSignature };
+  return { tickables, bars, noteMidis, timeSignature, harmony };
 }
 
 export const ALL_TONICS = [...BASE_LETTERS];

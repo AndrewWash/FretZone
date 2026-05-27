@@ -57,11 +57,14 @@ export interface EtudeNote {
 // everything in `upper` and leave `lower` empty. `startRepeat`/`endRepeat`
 // mirror MusicXML `<repeat direction="forward|backward"/>` barlines and tell
 // the renderer to draw repeat signs at the left/right edge of the bar.
+// `pickup` flags an opening anacrusis: the bar's beat length is the sum of
+// its actual notes rather than the time signature's full count.
 export interface EtudeBar {
   upper: EtudeNote[];
   lower: EtudeNote[];
   startRepeat?: boolean;
   endRepeat?: boolean;
+  pickup?: boolean;
 }
 
 export interface SorEtude {
@@ -130,4 +133,13 @@ export function defaultSorConfig(): SorConfig {
 export function noteBeats(n: EtudeNote): number {
   const base = ETUDE_DURATION_BEATS[n.duration];
   return n.dotted ? base * 1.5 : base;
+}
+
+// Beats this bar occupies on the timeline. For a normal bar, the time
+// signature's full count; for a pickup, the sum of its actual upper-voice
+// notes (or lower, when upper is empty).
+export function barBeats(bar: EtudeBar, fullBeats: number): number {
+  if (!bar.pickup) return fullBeats;
+  const arr = bar.upper.length ? bar.upper : bar.lower;
+  return arr.reduce((s, n) => s + noteBeats(n), 0);
 }

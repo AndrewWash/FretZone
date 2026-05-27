@@ -1,6 +1,9 @@
 import type { BaseLetter } from '../theory/note';
 import type { ModeName } from '../theory/modes';
 import type { StringId } from '../quiz/models';
+import type { HarmonyPlan } from './harmony-planner';
+
+export type { HarmonyPlan } from './harmony-planner';
 
 export type Difficulty = 'Easy' | 'Intermediate' | 'Expert' | 'Custom';
 
@@ -54,6 +57,7 @@ export interface MelodyConfig {
   a4: number;
   centsTolerance: number;
   progression: ProgressionMode;
+  bassVoiceEnabled: boolean;
   custom: CustomOptions;
   practiceMode: PracticeMode;
 }
@@ -72,4 +76,7 @@ export interface MelodyPhrase {
   bars: MelodyTickable[][];
   noteMidis: number[];   // sounding MIDIs in play order, used for detection
   timeSignature: TimeSignature;
+  // Preserved from planHarmony() so consumers (bass voice planner, chord
+  // display) can read the active progression without re-running the engine.
+  harmony?: HarmonyPlan | null;
 }

@@ -71,6 +71,7 @@ const SEVENZ = 'C:\\Program Files\\7-Zip\\7z.exe';
 // the top-level call below since `const` has a temporal dead zone.
 const STEP_PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const TYPE_TO_DUR = { whole: 'w', half: 'h', quarter: 'q', eighth: '8', '16th': '16', '32nd': '32' };
+const DUR_BEATS = { w: 4, h: 2, q: 1, '8': 0.5, '16': 0.25, '32': 0.125 };
 const OPEN_MIDI = [null, 64, 59, 55, 50, 45, 40]; // sounding, s=1 (high E) .. s=6 (low E)
 const MAX_FRET = 14;
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -130,7 +131,27 @@ if (firstAttrs?.time) {
 
 const bars = measuresRaw.map((m, idx) => readBar(m, idx + 1));
 
+// Flag any bar whose notes sum to fewer beats than the time signature.
+// This covers opening anacrusis (m1) as well as the convention where a
+// repeat that starts on a pickup leaves the bar before the repeat sign
+// (and/or the first bar after it) short — Sor's Op. 60 No. 4 does both.
+const [tsBeats, tsType] = timeSig.split('/').map(Number);
+const fullBeats = (tsBeats * 4) / tsType;
+bars.forEach((b, idx) => {
+  if (!b.upper.length && !b.lower.length) return;
+  const actual = sumBarBeats(b);
+  if (actual > 0 && actual < fullBeats - 1e-9) {
+    b.pickup = true;
+    process.stderr.write(`Short measure m${idx + 1}: ${actual} beats (full bar = ${fullBeats}) → pickup\n`);
+  }
+});
+
 process.stdout.write(emitCatalog(bars, timeSig));
+
+function sumBarBeats(bar) {
+  const arr = bar.upper.length ? bar.upper : bar.lower;
+  return arr.reduce((s, n) => s + (DUR_BEATS[n.duration] || 0) * (n.dotted ? 1.5 : 1), 0);
+}
 
 // ── per-measure parsing ────────────────────────────────────────────────────
 function readBar(m) {
@@ -309,6 +330,7 @@ function emitCatalog(bars, timeSig) {
     lines.push(`    ],`);
     if (bar.startRepeat) lines.push(`    startRepeat: true,`);
     if (bar.endRepeat) lines.push(`    endRepeat: true,`);
+    if (bar.pickup) lines.push(`    pickup: true,`);
     lines.push(`  },`);
   });
   lines.push(`];`);

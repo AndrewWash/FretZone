@@ -12,6 +12,7 @@ import { renderMelodyEl } from './vexflow-render';
 })
 export class MelodyStaffComponent {
   bars = input.required<MelodyTickable[][]>();
+  bassBars = input<MelodyTickable[][] | null>(null);
   playedCount = input<number>(0);
   tonic = input<BaseLetter>('C');
   mode = input<ModeName>('Ionian');
@@ -23,12 +24,14 @@ export class MelodyStaffComponent {
 
   constructor() {
     effect(() => {
+      const bb = this.bassBars();
       renderMelodyEl(this.host().nativeElement, this.bars(), this.playedCount(), {
         width: this.width(),
         tonic: this.tonic(),
         mode: this.mode(),
         timeSignature: this.timeSignature(),
         theme: this.theme.notationTheme(),
+        bassBars: bb ?? undefined,
       });
     });
   }
